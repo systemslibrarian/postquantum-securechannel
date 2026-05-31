@@ -1,11 +1,22 @@
 <Solution>
+  <Folder Name="/benchmarks/">
+    <Project Path="benchmarks/PostQuantum.SecureChannel.Benchmarks/PostQuantum.SecureChannel.Benchmarks.csproj" />
+  </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/EchoDemo/EchoDemo.csproj" />
+    <Project Path="samples/MicroserviceWebSocket.Server/MicroserviceWebSocket.Server.csproj" />
+    <Project Path="samples/MicroserviceWebSocket.Client/MicroserviceWebSocket.Client.csproj" />
+    <Project Path="samples/WorkerControlPlane/WorkerControlPlane.csproj" />
+    <Project Path="samples/QueueEnvelope/QueueEnvelope.csproj" />
   </Folder>
   <Folder Name="/src/">
     <Project Path="src/PostQuantum.SecureChannel/PostQuantum.SecureChannel.csproj" />
+    <Project Path="src/PostQuantum.SecureChannel.AspNetCore/PostQuantum.SecureChannel.AspNetCore.csproj" />
+    <Project Path="src/PostQuantum.SecureChannel.Testing/PostQuantum.SecureChannel.Testing.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/PostQuantum.SecureChannel.Tests/PostQuantum.SecureChannel.Tests.csproj" />
+    <Project Path="tests/PostQuantum.SecureChannel.AspNetCore.Tests/PostQuantum.SecureChannel.AspNetCore.Tests.csproj" />
+    <Project Path="tests/PostQuantum.SecureChannel.Testing.Tests/PostQuantum.SecureChannel.Testing.Tests.csproj" />
   </Folder>
 </Solution>

@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../../src/PostQuantum.SecureChannel/PostQuantum.SecureChannel.csproj" />
+    <ProjectReference Include="../../src/PostQuantum.SecureChannel.Testing/PostQuantum.SecureChannel.Testing.csproj" />
+  </ItemGroup>
+
+</Project>

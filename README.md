@@ -27,10 +27,10 @@ It combines:
         └──────────  AES-256-GCM session records  ────────────┘
 ```
 
-> ⚠️ **Preview release (0.2.1-preview.1).** The cryptographic core is validated against published
+> ⚠️ **Preview release (0.3.0-preview.1).** The cryptographic core is validated against published
 > IETF/NIST test vectors, but this library has **not** had an independent security audit. Please read
 > [`KNOWN-GAPS.md`](KNOWN-GAPS.md) before using it for anything that matters. The wire format is
-> stable across the 0.2.x line; 0.2.x is **not** compatible with 0.1.x.
+> stable across the 0.2.x → 0.3.x line; neither is compatible with 0.1.x.
 
 ---
 
@@ -51,10 +51,36 @@ still protects you. You only lose if **both** fall.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.SecureChannel --version 0.2.1-preview.1
+dotnet add package PostQuantum.SecureChannel --version 0.3.0-preview.1
+
+# Optional companions:
+dotnet add package PostQuantum.SecureChannel.AspNetCore --version 0.3.0-preview.1   # DI, WebSocket adapter
+dotnet add package PostQuantum.SecureChannel.Testing    --version 0.3.0-preview.1   # tests only
 ```
 
 Targets `net8.0`, `net9.0`, and `net10.0`.
+
+### Documentation by scenario
+- **[Architecture](docs/architecture.md)** — how it fits together (layers, handshake, key schedule).
+- **[Decision guide](docs/decision-guide.md)** — when to use this vs TLS / Noise / libsodium.
+- **[Threat model](docs/threat-model.md)** — goals, non-goals, and adversary capabilities.
+- **[Operations guide](docs/operations.md)** — pinning, rotation, alerts, incident response.
+- **[Troubleshooting](docs/troubleshooting.md)** — every common exception with a recovery path.
+- **[Protocol spec](docs/protocol.md)** — wire format, key schedule, KAT references.
+
+### Production-shaped samples
+- **[`samples/MicroserviceWebSocket.Server`](samples/MicroserviceWebSocket.Server)** + **`.Client`** — two ASP.NET Core services exchanging PQ-secured WebSocket traffic.
+- **[`samples/WorkerControlPlane`](samples/WorkerControlPlane)** — a `BackgroundService` worker dialing a control plane over TCP.
+- **[`samples/QueueEnvelope`](samples/QueueEnvelope)** — broker-agnostic envelope encryption for message queues.
+- **[`samples/EchoDemo`](samples/EchoDemo)** — the minimal end-to-end TCP demo.
+
+### What's new in 0.3.0
+
+- **`PostQuantum.SecureChannel.AspNetCore`** — DI registration, `IConfiguration` binding, WebSocket adapter, `MapPqWebSocket()` endpoint helper.
+- **`PostQuantum.SecureChannel.Testing`** — in-memory duplex stream and one-call handshake harness for fixtures.
+- **OpenTelemetry-friendly tracing** — `ActivitySource` alongside the existing `Meter` / `EventSource`.
+- **Production-shaped samples** — microservice WebSocket, worker → control-plane, queue envelope.
+- **Scenario-first docs** — architecture, threat model, decision guide, operations, troubleshooting.
 
 ### What's new in 0.2.1
 

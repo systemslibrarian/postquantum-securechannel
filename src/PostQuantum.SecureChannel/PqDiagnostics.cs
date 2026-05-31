@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Diagnostics.Metrics;
 using System.Diagnostics.Tracing;
 
@@ -24,6 +25,12 @@ public static class PqDiagnostics
 
     /// <summary>The <see cref="System.Diagnostics.Metrics.Meter"/> instance. Subscribe with <c>MeterListener</c> or OpenTelemetry.</summary>
     public static readonly Meter Meter = new(Name, ThisAssemblyVersion);
+
+    /// <summary>
+    /// The <see cref="System.Diagnostics.ActivitySource"/> instance for distributed tracing.
+    /// Subscribe with <c>ActivityListener</c> or OpenTelemetry (<c>AddSource("PostQuantum.SecureChannel")</c>).
+    /// </summary>
+    public static readonly ActivitySource ActivitySource = new(Name, ThisAssemblyVersion);
 
     internal static readonly Counter<long> HandshakesStarted =
         Meter.CreateCounter<long>("pqsc.handshakes.started", description: "Number of handshakes initiated (client) or accepted (server).");
@@ -53,6 +60,15 @@ public static class PqDiagnostics
     {
         HandshakesStarted.Add(1, new KeyValuePair<string, object?>("role", role.ToString()));
         Source.HandshakeStarted(role);
+    }
+
+    internal static Activity? StartHandshakeActivity(PqRole role)
+    {
+        var activity = ActivitySource.StartActivity(
+            role == PqRole.Client ? "pqsc.handshake.client" : "pqsc.handshake.server",
+            ActivityKind.Internal);
+        activity?.SetTag("pqsc.role", role.ToString());
+        return activity;
     }
 
     internal static void HandshakeCompleted(PqRole role, bool resumed, bool mutual)

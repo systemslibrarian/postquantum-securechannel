@@ -56,6 +56,7 @@ public sealed class PqClientHandshake : IDisposable
     private XWingKeyPair? _keyPair;
     private byte[]? _clientRandom;
     private byte[]? _clientHelloBytes;
+    private System.Diagnostics.Activity? _activity;
     private bool _completed;
     private bool _disposed;
 
@@ -70,6 +71,7 @@ public sealed class PqClientHandshake : IDisposable
             throw new InvalidOperationException("ClientHello has already been created.");
         }
 
+        _activity = PqDiagnostics.StartHandshakeActivity(PqRole.Client);
         PqDiagnostics.HandshakeStarted(PqRole.Client);
         _keyPair = XWing.GenerateKeyPair();
         _clientRandom = RandomBytes.Create(PqProtocol.RandomSize);
@@ -166,15 +168,22 @@ public sealed class PqClientHandshake : IDisposable
             var session = new PqSession(PqRole.Client, schedule, pinned, _options.SessionOptions);
             schedule.Dispose(); // session has its own clones of the secrets it needs
             PqDiagnostics.HandshakeCompleted(PqRole.Client, _options.ResumptionSecret is { Length: > 0 }, mutual);
+            _activity?.SetTag("pqsc.mutual", mutual);
+            _activity?.SetTag("pqsc.resumed", _options.ResumptionSecret is { Length: > 0 });
+            _activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+            _activity?.Dispose();
+            _activity = null;
             return new PqClientHandshakeResult(session, finished.Serialize());
         }
-        catch (PqSecureChannelException)
+        catch (PqSecureChannelException ex)
         {
+            _activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
             throw;
         }
         catch (Exception ex)
         {
             PqDiagnostics.HandshakeFailed(PqRole.Client, "unexpected-error");
+            _activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
             throw new PqProtocolException("Unexpected error while processing ServerHello.", ex);
         }
     }
@@ -236,6 +245,8 @@ public sealed class PqClientHandshake : IDisposable
             CryptographicOperations.ZeroMemory(_clientRandom);
         }
 
+        _activity?.Dispose();
+        _activity = null;
         _disposed = true;
     }
 }
@@ -266,6 +277,7 @@ public sealed class PqServerHandshake : IDisposable
     private readonly PqServerOptions _options;
     private KeySchedule? _schedule;
     private byte[]? _confirmationHash; // h2
+    private System.Diagnostics.Activity? _activity;
     private bool _helloProcessed;
     private bool _completed;
     private bool _disposed;
@@ -281,6 +293,7 @@ public sealed class PqServerHandshake : IDisposable
             throw new InvalidOperationException("ClientHello has already been processed.");
         }
 
+        _activity = PqDiagnostics.StartHandshakeActivity(PqRole.Server);
         PqDiagnostics.HandshakeStarted(PqRole.Server);
 
         var clientHelloBytes = clientHello.ToArray();
@@ -373,6 +386,11 @@ public sealed class PqServerHandshake : IDisposable
             PqRole.Server,
             _options.ResumptionSecret is { Length: > 0 },
             clientIdentity is not null);
+        _activity?.SetTag("pqsc.mutual", clientIdentity is not null);
+        _activity?.SetTag("pqsc.resumed", _options.ResumptionSecret is { Length: > 0 });
+        _activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Ok);
+        _activity?.Dispose();
+        _activity = null;
         return session;
     }
 
@@ -445,6 +463,8 @@ public sealed class PqServerHandshake : IDisposable
             CryptographicOperations.ZeroMemory(_confirmationHash);
         }
 
+        _activity?.Dispose();
+        _activity = null;
         _disposed = true;
     }
 }

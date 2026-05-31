@@ -63,8 +63,14 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
-      - name: Pack
+      - name: Pack core
         run: dotnet pack src/PostQuantum.SecureChannel/PostQuantum.SecureChannel.csproj --configuration Release -o ./artifacts
+
+      - name: Pack AspNetCore
+        run: dotnet pack src/PostQuantum.SecureChannel.AspNetCore/PostQuantum.SecureChannel.AspNetCore.csproj --configuration Release -o ./artifacts
+
+      - name: Pack Testing
+        run: dotnet pack src/PostQuantum.SecureChannel.Testing/PostQuantum.SecureChannel.Testing.csproj --configuration Release -o ./artifacts
 
       - name: Upload package artifacts
         uses: actions/upload-artifact@v4

@@ -1,0 +1,50 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PackageId>PostQuantum.SecureChannel.AspNetCore</PackageId>
+    <Version>0.3.0-preview.1</Version>
+    <PackageReleaseNotes>0.3.0-preview.1: Initial release of ASP.NET Core integration for PostQuantum.SecureChannel. Adds AddPostQuantumSecureChannel() DI registration with IConfiguration binding for pinned identities, a WebSocket adapter that wraps any HTTP WebSocket as a PqSecureChannelStream, and MapPqEndpoint() / MapPqWebSocket() endpoint helpers for minimal APIs.</PackageReleaseNotes>
+    <Authors>Paul Clark</Authors>
+    <Description>ASP.NET Core integration for PostQuantum.SecureChannel: DI registration, IConfiguration binding for pinned identities, a WebSocket-to-Stream adapter, and minimal-API endpoint helpers. Lets a service expose or consume a PQ-secured channel without writing transport plumbing.</Description>
+    <Summary>ASP.NET Core integration (DI, WebSocket adapter, endpoint helpers) for PostQuantum.SecureChannel.</Summary>
+    <PackageTags>post-quantum;secure-channel;aspnetcore;dependency-injection;websocket;middleware</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-securechannel</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/systemslibrarian/postquantum-securechannel</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) Paul Clark</Copyright>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="../PostQuantum.SecureChannel/PostQuantum.SecureChannel.csproj" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+</Project>

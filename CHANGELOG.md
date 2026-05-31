@@ -4,7 +4,53 @@ All notable changes to PostQuantum.SecureChannel are documented here. This proje
 [Semantic Versioning](https://semver.org/). While pre-1.0, the wire format and API may change between
 preview releases.
 
-## [0.2.1-preview.1]
+## [0.3.0-preview.1]
+
+An **ecosystem-foundation release**. No core wire-format changes — 0.3.0 talks to 0.2.x peers.
+What's new is shape: companion packages, samples that look like real production, and the
+documentation real engineers ask for before adopting a crypto library.
+
+### New packages
+- **`PostQuantum.SecureChannel.AspNetCore`** — DI registration
+  (`services.AddPostQuantumSecureChannel()`), `IConfiguration` binding for the server identity
+  seed and pinned client keys, a `PqWebSocketStream` adapter that wraps any WebSocket as a
+  `PqSecureChannelStream`, and a `MapPqWebSocket("/route", handler)` endpoint helper for minimal
+  APIs. Includes a client-side `ws.AcceptPqClientAsync(options)` extension.
+- **`PostQuantum.SecureChannel.Testing`** — `PqInMemoryDuplex.CreatePair()` for tests that need
+  a real `Stream` pair without TCP, and `PqHandshakeHarness.Create()` that returns a connected
+  `(Client, Server)` `PqSession` pair in one call (with opt-in mutual auth, resumption secret,
+  and session preset).
+
+### Observability
+- **`ActivitySource` for distributed tracing.** Alongside the existing `EventSource` and `Meter`,
+  every handshake now emits a `pqsc.handshake.{client,server}` activity with tags for mutual auth,
+  resumption, and outcome. OpenTelemetry users: `AddSource("PostQuantum.SecureChannel")`.
+
+### Samples (production shapes, not just echo)
+- `samples/MicroserviceWebSocket.Server` + `.Client` — two ASP.NET Core services exchanging
+  PQ-secured WebSocket traffic, identity loaded from configuration.
+- `samples/WorkerControlPlane` — a `BackgroundService` worker dialing a control plane over TCP
+  with `PqSessionOptions.Recommended` auto-rekey.
+- `samples/QueueEnvelope` — `PqSession.Encrypt` / `Decrypt` for envelope encryption through an
+  untrusted broker (the broker never sees plaintext).
+
+### Documentation
+- `docs/architecture.md` — one-page tour of the layers, handshake, key schedule, and trust model.
+- `docs/threat-model.md` — goals, non-goals, assumptions, and an adversary-capability table.
+- `docs/decision-guide.md` — when (not) to use this vs TLS / Noise / libsodium, with a
+  comparison table and decision shortcuts.
+- `docs/operations.md` — pinning, rotation playbook, choosing replay protection / rekey cadence,
+  what to alert on, incident response on key compromise.
+- `docs/troubleshooting.md` — every common exception with diagnosis and recovery steps.
+
+### Benchmarks
+- New `benchmarks/PostQuantum.SecureChannel.Benchmarks` (BenchmarkDotNet): X-Wing encap/decap,
+  full handshake, record throughput at 64B / 1KiB / 16KiB / 256KiB. Run before each release.
+
+### Includes everything from 0.2.1-preview.1
+(the 0.2.1 preview was rolled into this release rather than published separately — see below.)
+
+## [0.2.1-preview.1] — superseded, never published
 
 A hardening and ergonomics release. **No wire-format changes** — peers running 0.2.0 and 0.2.1 are
 interoperable.

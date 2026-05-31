@@ -15,8 +15,8 @@
   <!-- ============================ NuGet packaging metadata ============================ -->
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel</PackageId>
-    <Version>0.2.1-preview.1</Version>
-    <PackageReleaseNotes>0.2.1-preview.1: Hardening + ergonomics release (wire-compatible with 0.2.0). Replaces the HashSet-backed sliding-window replay filter with a fixed-size bitmap (DoS-resistant); tightens AES-GCM record cap to NIST 2^32 and adds a 2^36-byte per-epoch budget with a dedicated PqEpochExhaustedException; adds AllowedServerIdentities for staged identity rotation; adds named PqSessionOptions presets (Recommended, UnorderedTransport, HighThroughput); adds built-in observability via PqDiagnostics (EventSource + Meter); makes PqClientHandshake and PqServerHandshake IDisposable so aborted handshakes no longer leak ephemeral keys.</PackageReleaseNotes>
+    <Version>0.3.0-preview.1</Version>
+    <PackageReleaseNotes>0.3.0-preview.1: Ecosystem-foundation release (wire-compatible with 0.2.x). Adds OpenTelemetry-friendly distributed tracing via System.Diagnostics.ActivitySource alongside the existing Meter/EventSource. Releases two companion packages: PostQuantum.SecureChannel.AspNetCore (DI registration, IConfiguration binding, WebSocket-to-Stream adapter, MapPqWebSocket endpoint helper) and PostQuantum.SecureChannel.Testing (in-memory duplex transport, one-call handshake harness). Adds production-shaped samples (MicroserviceWebSocket, WorkerControlPlane, QueueEnvelope) and architecture/threat-model/decision/operations/troubleshooting docs. Includes 0.2.1-preview.1 hardening: DoS-safe bitmap replay window, NIST SP 800-38D record + byte caps with PqEpochExhaustedException, IDisposable handshakes, AllowedServerIdentities for staged rotation, and named PqSessionOptions presets.</PackageReleaseNotes>
     <Authors>Paul Clark</Authors>
     <Company>Paul Clark</Company>
     <Product>PostQuantum.SecureChannel</Product>
