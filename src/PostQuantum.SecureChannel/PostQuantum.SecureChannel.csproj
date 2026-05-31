@@ -20,8 +20,8 @@
     <Authors>Paul Clark</Authors>
     <Company>Paul Clark</Company>
     <Product>PostQuantum.SecureChannel</Product>
-    <Description>Post-quantum, mutually-authenticated, transport-agnostic encrypted channels for .NET. Establishes a session in three messages using X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA-65 signatures, then protects application traffic with AES-256-GCM. Secure-by-default with fixed algorithms, raw-key pinning, DoS-resistant replay protection, NIST SP 800-38D safety bounds, built-in observability (EventSource + Meter + ActivitySource), and a small public API. Targets net8.0 / net9.0 / net10.0.</Description>
-    <Summary>Post-quantum hybrid secure channel (X-Wing + ML-DSA) with authenticated, replay-resistant AES-256-GCM sessions for .NET 8/9/10. Three-message handshake, secure-by-default, transport-agnostic.</Summary>
+    <Description>The high-level post-quantum secure channel library for .NET. Three messages to a live session, mutually authenticated, forward-secret, replay-resistant, transport-agnostic. Built on X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA-65 signatures, with AES-256-GCM record encryption. Secure-by-default — algorithms and parameters are fixed; there are no insecure knobs. Includes a Stream adapter, DoS-resistant replay protection, NIST SP 800-38D safety bounds, and built-in observability (EventSource + Meter + ActivitySource). Use this instead of wiring primitives together by hand. Targets net8.0 / net9.0 / net10.0.</Description>
+    <Summary>High-level post-quantum secure-channel library for .NET. Three-message handshake, mutually authenticated, forward-secret AES-256-GCM sessions over any transport.</Summary>
     <PackageTags>post-quantum;pqc;cryptography;x-wing;xwing;ml-kem;ml-dsa;kyber;dilithium;secure-channel;session;hybrid;kem;encryption;aes-gcm;quantum-safe;mutual-auth;tls-alternative;forward-secrecy;net10</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

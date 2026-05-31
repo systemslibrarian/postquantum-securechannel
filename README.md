@@ -132,71 +132,122 @@ in the [changelog](CHANGELOG.md).
 
 ---
 
-## Quick start (server-authenticated)
+## How this library is different
 
-This is the common case — like TLS, the client verifies the server's pinned identity, and the channel
-is confidential and integrity-protected in both directions.
+PostQuantum.SecureChannel is a **high-level secure-channel library**, not a primitives bundle.
+
+- **Not this:** "here is ML-KEM. Here is ML-DSA. Here is HKDF. Wire them together correctly,
+  remember the key schedule, defeat replay yourself, get the AEAD nonce construction right, and
+  please don't reuse a nonce." That is the BouncyCastle or libsodium experience.
+- **This:** `var (session, _) = ...handshake; session.Encrypt(payload)`. The protocol, key
+  schedule, replay protection, ratcheting, and NIST safety bounds are decided for you — there are
+  no insecure knobs.
+
+If you need primitives, use BouncyCastle directly. If you need a **session** between two .NET
+endpoints that is mutually authenticated, forward-secret, post-quantum-safe, and observable —
+that's what this library is for.
+
+---
+
+## Quick start — a secure channel over TCP (server-authenticated)
+
+This is the realistic adoption path: wrap any bidirectional `Stream`, get back something that
+behaves like `Stream` but transparently encrypts everything. The library drives the three-message
+handshake and the AES-256-GCM record layer for you.
 
 ```csharp
-using PostQuantum.SecureChannel;
+using System.Net;
+using System.Net.Sockets;
 using System.Text;
+using PostQuantum.SecureChannel;
+using PostQuantum.SecureChannel.Transport;
 
-// ── One-time setup: the server has a long-term identity. ───────────────────────
-// Distribute serverIdentity.PublicKey.Export() to clients out of band and pin it.
+// ── One-time setup: the server has a long-term identity. Distribute the public ─
+// half out of band (config / Key Vault / Secrets Manager) and pin it on clients.
 using var serverIdentity = PqIdentity.Create();
-byte[] pinnedServerKey = serverIdentity.PublicKey.Export();
+string pinnedBase64 = serverIdentity.PublicKey.ToBase64();
+Console.WriteLine($"Pin this on the client: {serverIdentity.PublicKey.ShortFingerprint()}");
 
-// ── Handshake ──────────────────────────────────────────────────────────────────
-// Client side:
-var client = PqSecureChannel.CreateClient(new PqClientOptions
+// ── Server side ────────────────────────────────────────────────────────────────
+var listener = new TcpListener(IPAddress.Loopback, 5001);
+listener.Start();
+_ = Task.Run(async () =>
 {
-    ServerIdentity = PqIdentityPublicKey.Import(pinnedServerKey),
+    using var conn = await listener.AcceptTcpClientAsync();
+    await using var channel = await PqSecureChannel.AcceptAsync(
+        conn.GetStream(),
+        new PqServerOptions { Identity = serverIdentity });
+
+    var buf = new byte[1024];
+    int read = await channel.ReadAsync(buf);
+    await channel.WriteAsync(Encoding.UTF8.GetBytes($"echo: {Encoding.UTF8.GetString(buf, 0, read)}"));
 });
-byte[] clientHello = client.CreateClientHello();          // send to server
 
-// Server side:
-var server = PqSecureChannel.CreateServer(new PqServerOptions
-{
-    Identity = serverIdentity,
-});
-byte[] serverHello = server.ProcessClientHello(clientHello); // send to client
+// ── Client side ────────────────────────────────────────────────────────────────
+using var tcp = new TcpClient();
+await tcp.ConnectAsync(IPAddress.Loopback, 5001);
 
-// Client completes and authenticates the server:
-PqClientHandshakeResult result = client.ProcessServerHello(serverHello);
-PqSession clientSession = result.Session;
-byte[] clientFinished = result.ClientFinished;             // send to server
+await using var channel = await PqSecureChannel.ConnectAsync(
+    tcp.GetStream(),
+    new PqClientOptions { ServerIdentity = PqIdentityPublicKey.FromBase64(pinnedBase64) });
 
-// Server completes:
-PqSession serverSession = server.ProcessClientFinished(clientFinished);
+Console.WriteLine($"Verified server {channel.Session.RemoteIdentity!.ShortFingerprint()}");
 
-// ── Send data ────────────────────────────────────────────────────────────────
-byte[] record = clientSession.Encrypt(Encoding.UTF8.GetBytes("hello, server"));
-byte[] plain  = serverSession.Decrypt(record);
-Console.WriteLine(Encoding.UTF8.GetString(plain)); // "hello, server"
-
-// Replies work the same way:
-byte[] reply = serverSession.Encrypt(Encoding.UTF8.GetBytes("hello, client"));
-Console.WriteLine(Encoding.UTF8.GetString(clientSession.Decrypt(reply)));
+await channel.WriteAsync(Encoding.UTF8.GetBytes("hello, post-quantum world"));
+var reply = new byte[64];
+int n = await channel.ReadAsync(reply);
+Console.WriteLine(Encoding.UTF8.GetString(reply, 0, n)); // "echo: hello, post-quantum world"
 ```
 
-The three handshake messages (`clientHello`, `serverHello`, `clientFinished`) are just `byte[]` — send
-them over whatever transport you already have (TCP, a message queue, HTTP, gRPC metadata, …). The
-library does no I/O.
+That's it. The handshake, the AES-256-GCM record framing, the per-direction sequence counters,
+the replay check, and the key-update policy are all handled by `PqSecureChannelStream`.
 
-### Pin and verify the server fingerprint
+### Pinning and verifying the server's fingerprint
 
 ```csharp
 // Distribute the key (e.g. in config) and print a fingerprint to compare out of band:
-string pinned = serverIdentity.PublicKey.ToBase64();         // store this on the client
-Console.WriteLine(serverIdentity.PublicKey.Fingerprint());   // full SHA-256, lowercase hex
-Console.WriteLine(serverIdentity.PublicKey.ShortFingerprint()); // e.g. "9f:86:d0:81:88:4c:7d:65"
-
-// On the client:
-var options = new PqClientOptions { ServerIdentity = PqIdentityPublicKey.FromBase64(pinned) };
+string pinned = serverIdentity.PublicKey.ToBase64();             // store this on the client
+Console.WriteLine(serverIdentity.PublicKey.Fingerprint());       // full SHA-256, lowercase hex
+Console.WriteLine(serverIdentity.PublicKey.ShortFingerprint());  // e.g. "9f:86:d0:81:88:4c:7d:65"
+Console.WriteLine(serverIdentity.PublicKey);                     // "pq:9f:86:d0:81:88:4c:7d:65"
 ```
 
 If a client ever sees a different fingerprint, the server's key has changed (or someone is in the
-middle) — and the handshake will fail with `PqAuthenticationException`.
+middle) — and the handshake fails with `PqAuthenticationException` *before* any traffic is
+exchanged.
+
+---
+
+## Advanced — driving the handshake yourself (no I/O in the library)
+
+For transports that aren't `Stream`-shaped (a message queue, a gRPC metadata channel, an HTTP
+request/response round trip), drive the three handshake messages by hand. The library does no I/O
+of its own at this layer — you exchange `byte[]`s however you like.
+
+```csharp
+using var serverIdentity = PqIdentity.Create();
+byte[] pinned = serverIdentity.PublicKey.Export();
+
+using var client = PqSecureChannel.CreateClient(new PqClientOptions
+{
+    ServerIdentity = PqIdentityPublicKey.Import(pinned),
+});
+using var server = PqSecureChannel.CreateServer(new PqServerOptions
+{
+    Identity = serverIdentity,
+});
+
+byte[] clientHello    = client.CreateClientHello();                  // 1 → send to server
+byte[] serverHello    = server.ProcessClientHello(clientHello);      // 2 → send to client
+var    handshake      = client.ProcessServerHello(serverHello);
+byte[] clientFinished = handshake.ClientFinished;                    // 3 → send to server
+PqSession clientSession = handshake.Session;
+PqSession serverSession = server.ProcessClientFinished(clientFinished);
+
+// Both sides now have a live PqSession. Encrypt / Decrypt are symmetric.
+byte[] record = clientSession.Encrypt(Encoding.UTF8.GetBytes("hello"));
+string text   = Encoding.UTF8.GetString(serverSession.Decrypt(record));
+```
 
 ---
 
@@ -239,35 +290,6 @@ byte[] plain  = serverSession.Decrypt(record, aad);   // must match
 
 ---
 
-## Streaming over a transport (TCP, etc.)
-
-If you'd rather not move three handshake messages and frame records yourself, wrap any bidirectional
-`Stream`. The adapter performs the handshake and then encrypts/decrypts transparently.
-
-```csharp
-using PostQuantum.SecureChannel;
-using PostQuantum.SecureChannel.Transport;
-
-// Server side — over an accepted TcpClient's NetworkStream:
-await using PqSecureChannelStream channel =
-    await PqSecureChannel.AcceptAsync(networkStream, new PqServerOptions { Identity = serverIdentity });
-await channel.WriteAsync(Encoding.UTF8.GetBytes("welcome"));
-
-// Client side — over a connected TcpClient's NetworkStream:
-await using PqSecureChannelStream channel = await PqSecureChannel.ConnectAsync(
-    networkStream, new PqClientOptions { ServerIdentity = PqIdentityPublicKey.Import(pinnedServerKey) });
-var buffer = new byte[7];
-await channel.ReadExactlyAsync(buffer); // "welcome"
-```
-
-`PqSecureChannelStream` is a real `Stream`: hand it to a `StreamReader`, a serializer, or anything else
-that speaks streams. Pass `handshakeTimeout:` to fail fast if a peer stalls during the handshake.
-
-> 💡 **Try it:** `dotnet run --project samples/EchoDemo` runs a complete TCP client/server demo —
-> handshake, server verification by fingerprint, echo, and a mid-session key update.
-
----
-
 ## Rekeying a long-lived session (key update)
 
 For long-lived connections, ratchet to fresh keys periodically without re-handshaking. The peer
@@ -299,10 +321,15 @@ if (session.NeedsKeyUpdate) { var ku = session.UpdateSendKey(); /* send ku */ }
 
 ---
 
-## Unordered or lossy transports (sliding-window anti-replay)
+## Replay & reorder protection
 
-The default is strict in-order delivery (ideal for TCP). For transports that may reorder or drop
-records, switch the receive side to a DTLS-style sliding window:
+Every record carries a per-direction, per-epoch 64-bit sequence number that feeds both the AES-GCM
+nonce *and* the receive-side replay check. Two modes are available:
+
+| Mode | Behavior | Use when |
+| --- | --- | --- |
+| **`PqReplayProtection.StrictOrdered`** *(default)* | Records must arrive in exact order. Any gap or repeat is rejected with `PqDecryptionException`. | Reliable, ordered transports (TCP, named pipes, ordered WebSockets). |
+| **`PqReplayProtection.SlidingWindow`** | A fixed-size bitmap (DTLS-style) accepts in-window, not-yet-seen sequences in any order. Replays and records older than the window are rejected. | Unordered / lossy transports (UDP-style, message queues with no ordering guarantee). |
 
 ```csharp
 var options = new PqServerOptions
@@ -311,13 +338,17 @@ var options = new PqServerOptions
     SessionOptions = new PqSessionOptions
     {
         ReplayProtection = PqReplayProtection.SlidingWindow,
-        ReplayWindowSize = 64,
+        ReplayWindowSize = 64,     // valid range: 8…1024
     },
 };
 ```
 
-In-window, not-yet-seen records are accepted in any order; replays and records older than the window
-are rejected.
+The sliding-window bitmap is allocated **once at session construction** — a peer cannot influence
+the receiver's memory footprint by sending crafted sequence numbers. Every check and commit is O(1)
+and allocation-free.
+
+Replay rejections are emitted on the `pqsc.records.rejected` metric counter (tagged with
+`reason=sequence-replay-or-reorder` vs `aead-auth-failure`), so they are easy to alert on.
 
 ---
 

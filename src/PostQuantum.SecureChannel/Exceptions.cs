@@ -31,6 +31,9 @@ public sealed class PqAuthenticationException : PqSecureChannelException
 {
     /// <summary>Initializes a new instance with a message.</summary>
     public PqAuthenticationException(string message) : base(message) { }
+
+    /// <summary>Initializes a new instance with a message and an inner exception.</summary>
+    public PqAuthenticationException(string message, Exception innerException) : base(message, innerException) { }
 }
 
 /// <summary>
@@ -61,4 +64,7 @@ public sealed class PqEpochExhaustedException : PqSecureChannelException
 {
     /// <summary>Initializes a new instance with a message.</summary>
     public PqEpochExhaustedException(string message) : base(message) { }
+
+    /// <summary>Initializes a new instance with a message and an inner exception.</summary>
+    public PqEpochExhaustedException(string message, Exception innerException) : base(message, innerException) { }
 }
