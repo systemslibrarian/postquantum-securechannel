@@ -1,0 +1,60 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <!-- Broad compatibility across modern .NET LTS/STS releases. -->
+    <TargetFrameworks>net8.0;net9.0;net10.0</TargetFrameworks>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest-recommended</AnalysisLevel>
+  </PropertyGroup>
+
+  <!-- ============================ NuGet packaging metadata ============================ -->
+  <PropertyGroup>
+    <PackageId>PostQuantum.SecureChannel</PackageId>
+    <Version>0.2.0-preview.1</Version>
+    <PackageReleaseNotes>0.2.0-preview.1: Adds in-band key update (rekey), DTLS-style sliding-window anti-replay, an async PqSecureChannelStream transport adapter, protocol version negotiation, an experimental resumption secret, and expanded test coverage (X-Wing KAT vectors + parser fuzzing). Wire format changed from 0.1.x and is not backward compatible.</PackageReleaseNotes>
+    <Authors>Paul Clark</Authors>
+    <Company>Paul Clark</Company>
+    <Product>PostQuantum.SecureChannel</Product>
+    <Description>A clean, high-level post-quantum secure channel and session-encryption library for .NET. Establishes mutually-verifiable, authenticated sessions using X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA signatures, then protects application traffic with AES-256-GCM. Secure-by-default, dependency-light, and built for client/server, microservice, and long-lived connection scenarios.</Description>
+    <Summary>Hybrid post-quantum secure channel (X-Wing + ML-DSA) with authenticated, replay-resistant AES-256-GCM sessions for .NET 8/9/10.</Summary>
+    <PackageTags>post-quantum;pqc;cryptography;x-wing;xwing;ml-kem;ml-dsa;kyber;dilithium;secure-channel;session;hybrid;kem;encryption;aes-gcm;net10</PackageTags>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-securechannel</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/systemslibrarian/postquantum-securechannel</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Copyright>Copyright (c) Paul Clark</Copyright>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <!-- ============================ Reproducible / source-linked builds ============================ -->
+  <PropertyGroup>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild Condition="'$(CI)' == 'true'">true</ContinuousIntegrationBuild>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Vetted, widely-deployed implementation of ML-KEM, ML-DSA, X25519, and SHA-3/SHAKE.
+         X-Wing's combiner is implemented in this library on top of those primitives. -->
+    <PackageReference Include="BouncyCastle.Cryptography" Version="2.6.2" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="../../README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="PostQuantum.SecureChannel.Tests" />
+  </ItemGroup>
+
+</Project>
