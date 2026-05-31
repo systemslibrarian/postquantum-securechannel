@@ -20,15 +20,16 @@
     <Authors>Paul Clark</Authors>
     <Company>Paul Clark</Company>
     <Product>PostQuantum.SecureChannel</Product>
-    <Description>A clean, high-level post-quantum secure channel and session-encryption library for .NET. Establishes mutually-verifiable, authenticated sessions using X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA signatures, then protects application traffic with AES-256-GCM. Secure-by-default, dependency-light, with built-in observability for client/server, microservice, and long-lived connection scenarios.</Description>
-    <Summary>Hybrid post-quantum secure channel (X-Wing + ML-DSA) with authenticated, replay-resistant AES-256-GCM sessions for .NET 8/9/10.</Summary>
-    <PackageTags>post-quantum;pqc;cryptography;x-wing;xwing;ml-kem;ml-dsa;kyber;dilithium;secure-channel;session;hybrid;kem;encryption;aes-gcm;net10</PackageTags>
+    <Description>Post-quantum, mutually-authenticated, transport-agnostic encrypted channels for .NET. Establishes a session in three messages using X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA-65 signatures, then protects application traffic with AES-256-GCM. Secure-by-default with fixed algorithms, raw-key pinning, DoS-resistant replay protection, NIST SP 800-38D safety bounds, built-in observability (EventSource + Meter + ActivitySource), and a small public API. Targets net8.0 / net9.0 / net10.0.</Description>
+    <Summary>Post-quantum hybrid secure channel (X-Wing + ML-DSA) with authenticated, replay-resistant AES-256-GCM sessions for .NET 8/9/10. Three-message handshake, secure-by-default, transport-agnostic.</Summary>
+    <PackageTags>post-quantum;pqc;cryptography;x-wing;xwing;ml-kem;ml-dsa;kyber;dilithium;secure-channel;session;hybrid;kem;encryption;aes-gcm;quantum-safe;mutual-auth;tls-alternative;forward-secrecy;net10</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-securechannel</PackageProjectUrl>
     <RepositoryUrl>https://github.com/systemslibrarian/postquantum-securechannel</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Copyright>Copyright (c) Paul Clark</Copyright>
+    <RepositoryBranch>main</RepositoryBranch>
+    <Copyright>Copyright (c) 2026 Paul Clark</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 

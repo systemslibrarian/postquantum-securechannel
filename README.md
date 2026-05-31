@@ -1,19 +1,16 @@
 # PostQuantum.SecureChannel
 
-**A clean, high-level post-quantum secure channel and session-encryption library for .NET.**
+> **Post-quantum, mutually-authenticated, transport-agnostic encrypted channels for .NET — three
+> messages to a live session, secure by default, no insecure knobs.**
 
-PostQuantum.SecureChannel lets two endpoints establish a mutually-verifiable, authenticated session
-that stays secure against both today's adversaries and tomorrow's quantum computers — with an API
-small enough to fit in your head.
+[![CI](https://github.com/systemslibrarian/postquantum-securechannel/actions/workflows/ci.yml/badge.svg)](https://github.com/systemslibrarian/postquantum-securechannel/actions/workflows/ci.yml)
+[![NuGet](https://img.shields.io/nuget/vpre/PostQuantum.SecureChannel.svg)](https://www.nuget.org/packages/PostQuantum.SecureChannel)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-It combines:
-
-- **[X-Wing](https://datatracker.ietf.org/doc/draft-connolly-cfrg-xwing-kem/) hybrid key agreement**
-  — ML-KEM-768 (FIPS 203) *and* X25519, so the session key is safe as long as **either** primitive
-  holds. You are protected even if one of them is later broken.
-- **[ML-DSA](https://csrc.nist.gov/pubs/fips/204/final) signatures** (FIPS 204, ML-DSA-65) — to
-  authenticate the handshake and defeat man-in-the-middle attacks.
-- **AES-256-GCM** — for fast, authenticated record encryption once the session is up.
+PostQuantum.SecureChannel establishes a mutually-verifiable, authenticated session between two .NET
+endpoints that stays secure against both today's adversaries and tomorrow's quantum computers — with
+an API small enough to fit in your head.
 
 ```
    ┌────────────┐   ClientHello  (X-Wing public key)    ┌────────────┐
@@ -27,24 +24,11 @@ It combines:
         └──────────  AES-256-GCM session records  ────────────┘
 ```
 
-> ⚠️ **Preview release (0.3.0-preview.1).** The cryptographic core is validated against published
-> IETF/NIST test vectors, but this library has **not** had an independent security audit. Please read
-> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) before using it for anything that matters. The wire format is
-> stable across the 0.2.x → 0.3.x line; neither is compatible with 0.1.x.
-
----
-
-## Why post-quantum, and why hybrid?
-
-A sufficiently large quantum computer running Shor's algorithm would break the classical key exchange
-(ECDH/RSA) that protects most traffic today. The threat is **"harvest now, decrypt later"**: an
-adversary can record your encrypted traffic today and decrypt it years later once such a machine
-exists. Anything that needs to stay confidential into the 2030s+ needs post-quantum protection now.
-
-**Hybrid** key agreement is the conservative path the IETF and NIST recommend during the transition:
-combine a new lattice KEM with a battle-tested classical one. X-Wing does exactly this. If ML-KEM is
-later found to have a flaw, X25519 still protects you; if a quantum computer breaks X25519, ML-KEM
-still protects you. You only lose if **both** fall.
+It combines **[X-Wing](https://datatracker.ietf.org/doc/draft-connolly-cfrg-xwing-kem/) hybrid key
+agreement** (ML-KEM-768 + X25519 — safe as long as *either* primitive holds),
+**[ML-DSA-65](https://csrc.nist.gov/pubs/fips/204/final) signatures** for handshake authentication,
+and **AES-256-GCM** for record encryption. Algorithms and parameters are fixed by design; there is
+no way to configure your way into a weak session.
 
 ---
 
@@ -54,59 +38,97 @@ still protects you. You only lose if **both** fall.
 dotnet add package PostQuantum.SecureChannel --version 0.3.0-preview.1
 
 # Optional companions:
-dotnet add package PostQuantum.SecureChannel.AspNetCore --version 0.3.0-preview.1   # DI, WebSocket adapter
+dotnet add package PostQuantum.SecureChannel.AspNetCore --version 0.3.0-preview.1   # DI, WebSocket
 dotnet add package PostQuantum.SecureChannel.Testing    --version 0.3.0-preview.1   # tests only
 ```
 
-Targets `net8.0`, `net9.0`, and `net10.0`.
+Targets `net8.0`, `net9.0`, and `net10.0`. Wire-format-stable across the 0.2.x → 0.3.x line.
 
-### Documentation by scenario
+## Try it in 30 seconds
+
+```bash
+git clone https://github.com/systemslibrarian/postquantum-securechannel
+cd postquantum-securechannel
+dotnet run --project samples/EchoDemo
+```
+
+You'll see a TCP client and server complete a post-quantum handshake on loopback, verify each
+other's identity by fingerprint, exchange three encrypted messages, and ratchet keys mid-session.
+The whole thing runs in well under a second.
+
+Then explore the more realistic samples:
+
+| Sample | Shape | What it shows |
+| --- | --- | --- |
+| [`samples/MicroserviceWebSocket.*`](samples/MicroserviceWebSocket.Server) | ASP.NET Core ↔ client | DI registration, WebSocket adapter, config-driven identity loading |
+| [`samples/WorkerControlPlane`](samples/WorkerControlPlane) | `BackgroundService` ↔ TCP coordinator | Long-lived connection, auto-rekey, hosted-service pattern |
+| [`samples/QueueEnvelope`](samples/QueueEnvelope) | Producer → broker → consumer | Envelope encryption — the broker never sees plaintext |
+| [`samples/EchoDemo`](samples/EchoDemo) | TCP loopback | Minimal end-to-end demonstration |
+
+---
+
+## Security posture at a glance
+
+| Property | How it's achieved |
+| --- | --- |
+| **Post-quantum confidentiality** | X-Wing hybrid (ML-KEM-768 + X25519); session secret holds as long as either primitive does |
+| **Forward secrecy** | Fresh ephemeral X-Wing key pair per handshake; private seeds zeroed after use |
+| **Server authentication** | ML-DSA-65 signature over the full handshake transcript, verified against a pinned key |
+| **Mutual authentication (opt-in)** | Client ML-DSA-65 signature + optional fingerprint allowlist |
+| **Key confirmation** | HMAC-SHA256 Finished MAC proves both sides derived the same keys |
+| **Transcript integrity** | Every signature/MAC covers SHA-256 of all prior handshake bytes |
+| **Record confidentiality + integrity** | AES-256-GCM with per-direction keys and per-epoch nonce-prefix HKDF derivation |
+| **Nonce-reuse safety** | Per-direction 64-bit counters + HKDF-derived IV prefixes; a nonce is never reused under a key |
+| **AES-GCM safety bounds** | NIST SP 800-38D caps enforced: 2³² records / 2³⁶ bytes per epoch (auto-rekey trips earlier) |
+| **Replay / reorder protection** | Strict in-order check (default) or fixed-size sliding-window bitmap for unordered transports |
+| **In-band rekeying** | `UpdateSendKey()` ratchets each direction to fresh keys without a re-handshake |
+| **Strong key separation** | HKDF-SHA256 with distinct, versioned domain-separation labels for every derived secret |
+| **Version negotiation** | Every handshake selects the highest mutually-supported protocol version |
+| **DoS-resistant replay window** | Sliding window is a fixed-size bitmap; a peer cannot influence receiver memory |
+| **Observable** | `EventSource` + `Meter` + `ActivitySource` named `PostQuantum.SecureChannel` |
+
+> ⚠ **Preview release.** The cryptographic core is validated against published IETF/NIST test
+> vectors, but this library has **not** had an independent security audit. Read
+> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) and [`docs/threat-model.md`](docs/threat-model.md) before relying
+> on it for high-value secrets.
+
+---
+
+## Why post-quantum, and why hybrid?
+
+A sufficiently large quantum computer running Shor's algorithm would break the classical key
+exchange (ECDH/RSA) that protects most traffic today. The threat is **"harvest now, decrypt later"**:
+an adversary can record encrypted traffic today and decrypt it years later once such a machine
+exists. Anything that needs to stay confidential into the 2030s+ needs post-quantum protection now.
+
+**Hybrid** key agreement is the conservative path the IETF and NIST recommend during the
+transition: combine a new lattice KEM with a battle-tested classical one. X-Wing does exactly this.
+If ML-KEM is later found flawed, X25519 still protects you; if a quantum computer breaks X25519,
+ML-KEM still protects you. You only lose if **both** fall.
+
+---
+
+## Documentation by scenario
+
 - **[Architecture](docs/architecture.md)** — how it fits together (layers, handshake, key schedule).
 - **[Decision guide](docs/decision-guide.md)** — when to use this vs TLS / Noise / libsodium.
 - **[Threat model](docs/threat-model.md)** — goals, non-goals, and adversary capabilities.
 - **[Operations guide](docs/operations.md)** — pinning, rotation, alerts, incident response.
 - **[Troubleshooting](docs/troubleshooting.md)** — every common exception with a recovery path.
 - **[Protocol spec](docs/protocol.md)** — wire format, key schedule, KAT references.
-
-### Production-shaped samples
-- **[`samples/MicroserviceWebSocket.Server`](samples/MicroserviceWebSocket.Server)** + **`.Client`** — two ASP.NET Core services exchanging PQ-secured WebSocket traffic.
-- **[`samples/WorkerControlPlane`](samples/WorkerControlPlane)** — a `BackgroundService` worker dialing a control plane over TCP.
-- **[`samples/QueueEnvelope`](samples/QueueEnvelope)** — broker-agnostic envelope encryption for message queues.
-- **[`samples/EchoDemo`](samples/EchoDemo)** — the minimal end-to-end TCP demo.
+- **[Changelog](CHANGELOG.md)** — full version history.
 
 ### What's new in 0.3.0
 
-- **`PostQuantum.SecureChannel.AspNetCore`** — DI registration, `IConfiguration` binding, WebSocket adapter, `MapPqWebSocket()` endpoint helper.
-- **`PostQuantum.SecureChannel.Testing`** — in-memory duplex stream and one-call handshake harness for fixtures.
+- **`PostQuantum.SecureChannel.AspNetCore`** — DI registration, `IConfiguration` binding, WebSocket
+  adapter, `MapPqWebSocket()` endpoint helper.
+- **`PostQuantum.SecureChannel.Testing`** — in-memory duplex stream and one-call handshake harness.
 - **OpenTelemetry-friendly tracing** — `ActivitySource` alongside the existing `Meter` / `EventSource`.
 - **Production-shaped samples** — microservice WebSocket, worker → control-plane, queue envelope.
 - **Scenario-first docs** — architecture, threat model, decision guide, operations, troubleshooting.
 
-### What's new in 0.2.1
-
-- **DoS-resistant sliding-window replay filter** — the window is now a fixed-size bitmap allocated
-  at session construction; a peer cannot push the receiver into unbounded memory growth.
-- **AES-GCM safety bounds enforced** — `MaxRecordsPerEpoch` tightened to `2^32` (NIST SP 800-38D
-  deterministic-IV cap) plus a new `2^36`-byte per-epoch budget; both raise a dedicated
-  `PqEpochExhaustedException` if hit.
-- **Multi-pinned server identities** — `PqClientOptions.AllowedServerIdentities` supports staged
-  identity rotation (trust both the old and new key during overlap).
-- **Named session presets** — `PqSessionOptions.{Default,Recommended,UnorderedTransport,HighThroughput}`.
-- **Built-in observability** — `PqDiagnostics` exposes an `EventSource` and a `Meter`
-  (`PostQuantum.SecureChannel`) with counters for handshakes, replays, rekeys, and exhausted epochs.
-- **Aborted handshakes no longer leak ephemeral keys** — `PqClientHandshake` and `PqServerHandshake`
-  now implement `IDisposable`.
-
-### What's new in 0.2
-
-- **Async stream adapter** — `PqSecureChannel.ConnectAsync` / `AcceptAsync` drive the handshake over
-  any `Stream` and hand back a `PqSecureChannelStream` you can read and write like a normal stream.
-- **In-band key update (rekey)** — `UpdateSendKey()` ratchets to fresh keys mid-session without a new
-  handshake.
-- **Configurable replay protection** — strict-ordered (default) or a DTLS-style sliding window for
-  unordered transports.
-- **Protocol version negotiation** — every handshake selects the highest mutually-supported version.
-- **Experimental resumption** — bind a new session to a previous one via a shared resumption secret.
+Earlier release notes (0.2.x DoS-resistant replay, NIST caps, multi-pin, presets, observability) are
+in the [changelog](CHANGELOG.md).
 
 ---
 

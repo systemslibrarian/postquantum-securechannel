@@ -16,15 +16,16 @@
     <Version>0.3.0-preview.1</Version>
     <PackageReleaseNotes>0.3.0-preview.1: Initial release of test helpers for PostQuantum.SecureChannel. Provides PqDuplexStream (in-memory pair, no TCP) and PqHandshakeHarness (one-call client/server session pair) so tests stay focused on behavior instead of plumbing.</PackageReleaseNotes>
     <Authors>Paul Clark</Authors>
-    <Description>Test helpers for PostQuantum.SecureChannel: in-memory duplex transport, one-call handshake harness, and deterministic fixtures. Intended for use in test projects; not for production code paths.</Description>
-    <Summary>Test helpers for PostQuantum.SecureChannel.</Summary>
-    <PackageTags>post-quantum;secure-channel;testing;test-fixtures</PackageTags>
+    <Description>Test helpers for PostQuantum.SecureChannel. Provides PqInMemoryDuplex.CreatePair() for a pair of in-memory Streams (no TCP, no sockets, no port allocation) and PqHandshakeHarness.Create() that returns a connected client+server PqSession pair in one call (with opt-in mutual auth, resumption secret, and session presets). Intended for test projects; not for production code paths.</Description>
+    <Summary>Test helpers for PostQuantum.SecureChannel: in-memory duplex transport and a one-call handshake harness.</Summary>
+    <PackageTags>post-quantum;pqc;secure-channel;testing;test-fixtures;xunit;nunit;mstest</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageProjectUrl>https://github.com/systemslibrarian/postquantum-securechannel</PackageProjectUrl>
     <RepositoryUrl>https://github.com/systemslibrarian/postquantum-securechannel</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Copyright>Copyright (c) Paul Clark</Copyright>
+    <RepositoryBranch>main</RepositoryBranch>
+    <Copyright>Copyright (c) 2026 Paul Clark</Copyright>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
   </PropertyGroup>
 

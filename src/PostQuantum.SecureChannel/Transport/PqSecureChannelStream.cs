@@ -1,3 +1,5 @@
+using System.Security.Cryptography;
+
 namespace PostQuantum.SecureChannel.Transport;
 
 /// <summary>
@@ -101,6 +103,14 @@ public sealed class PqSecureChannelStream : Stream
         int toCopy = Math.Min(buffer.Length, _readBuffer.Length - _readOffset);
         _readBuffer.AsSpan(_readOffset, toCopy).CopyTo(buffer.Span);
         _readOffset += toCopy;
+
+        if (_readOffset == _readBuffer.Length && _readBuffer.Length > 0)
+        {
+            CryptographicOperations.ZeroMemory(_readBuffer);
+            _readBuffer = [];
+            _readOffset = 0;
+        }
+
         return toCopy;
     }
 
@@ -144,6 +154,9 @@ public sealed class PqSecureChannelStream : Stream
     {
         if (!_disposed && disposing)
         {
+            CryptographicOperations.ZeroMemory(_readBuffer);
+            _readBuffer = [];
+            _readOffset = 0;
             _session.Dispose();
             if (!_leaveInnerOpen)
             {

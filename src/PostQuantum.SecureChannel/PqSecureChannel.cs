@@ -20,6 +20,13 @@ namespace PostQuantum.SecureChannel;
 /// </remarks>
 public static partial class PqSecureChannel
 {
+    /// <summary>
+    /// The library version this build was produced from. Useful for diagnostics, logs, and bug
+    /// reports.
+    /// </summary>
+    public static string LibraryVersion { get; } =
+        typeof(PqSecureChannel).Assembly.GetName().Version?.ToString() ?? "0.0.0";
+
     /// <summary>Begins a client-side handshake.</summary>
     public static PqClientHandshake CreateClient(PqClientOptions options)
     {
@@ -254,17 +261,19 @@ public sealed class PqClientHandshake : IDisposable
 /// <summary>The result of <see cref="PqClientHandshake.ProcessServerHello"/>.</summary>
 public sealed class PqClientHandshakeResult
 {
+    private readonly byte[] _clientFinished;
+
     internal PqClientHandshakeResult(PqSession session, byte[] clientFinished)
     {
         Session = session;
-        ClientFinished = clientFinished;
+        _clientFinished = (byte[])clientFinished.Clone();
     }
 
     /// <summary>The established session, ready for <see cref="PqSession.Encrypt"/> / <see cref="PqSession.Decrypt"/>.</summary>
     public PqSession Session { get; }
 
     /// <summary>The <c>ClientFinished</c> bytes to deliver to the server to complete the handshake.</summary>
-    public byte[] ClientFinished { get; }
+    public byte[] ClientFinished => (byte[])_clientFinished.Clone();
 }
 
 /// <summary>
@@ -427,11 +436,10 @@ public sealed class PqServerHandshake : IDisposable
 
         if (_options.AuthorizedClients is { Count: > 0 } allowlist)
         {
-            var fingerprint = clientIdentity.Fingerprint();
             bool authorized = false;
             foreach (var a in allowlist)
             {
-                if (a.Fingerprint() == fingerprint)
+                if (a.Equals(clientIdentity))
                 {
                     authorized = true;
                     break;

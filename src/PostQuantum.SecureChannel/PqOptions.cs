@@ -30,13 +30,19 @@ public sealed class PqClientOptions
     /// </summary>
     public PqIdentity? ClientIdentity { get; init; }
 
+    private byte[]? _resumptionSecret;
+
     /// <summary>
     /// An optional resumption secret obtained from a previous session via
     /// <see cref="PqSession.ExportResumptionSecret"/>. When both peers supply the same secret it is mixed
     /// into the key schedule, binding this session to the earlier one. Still performs a full,
     /// forward-secret X-Wing handshake. Experimental &#8212; see <c>KNOWN-GAPS.md</c>.
     /// </summary>
-    public byte[]? ResumptionSecret { get; init; }
+    public byte[]? ResumptionSecret
+    {
+        get => _resumptionSecret is null ? null : (byte[])_resumptionSecret.Clone();
+        init => _resumptionSecret = value is null ? null : (byte[])value.Clone();
+    }
 
     /// <summary>Local session tuning (replay protection). Defaults to <see cref="PqSessionOptions.Default"/>.</summary>
     public PqSessionOptions SessionOptions { get; init; } = PqSessionOptions.Default;
@@ -60,10 +66,16 @@ public sealed class PqServerOptions
     /// </summary>
     public IReadOnlyCollection<PqIdentityPublicKey>? AuthorizedClients { get; init; }
 
+    private byte[]? _resumptionSecret;
+
     /// <summary>
     /// An optional resumption secret matching the client's. See <see cref="PqClientOptions.ResumptionSecret"/>.
     /// </summary>
-    public byte[]? ResumptionSecret { get; init; }
+    public byte[]? ResumptionSecret
+    {
+        get => _resumptionSecret is null ? null : (byte[])_resumptionSecret.Clone();
+        init => _resumptionSecret = value is null ? null : (byte[])value.Clone();
+    }
 
     /// <summary>Local session tuning (replay protection). Defaults to <see cref="PqSessionOptions.Default"/>.</summary>
     public PqSessionOptions SessionOptions { get; init; } = PqSessionOptions.Default;

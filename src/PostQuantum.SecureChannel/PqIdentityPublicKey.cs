@@ -7,9 +7,15 @@ namespace PostQuantum.SecureChannel;
 /// The public half of a <see cref="PqIdentity"/>: an encoded ML-DSA-65 verification key plus a short,
 /// human-comparable fingerprint for pinning.
 /// </summary>
-public sealed class PqIdentityPublicKey
+/// <remarks>
+/// Equality and hashing compare the underlying public-key bytes in constant time, so instances can be
+/// safely used as keys in <see cref="HashSet{T}"/> or <see cref="Dictionary{TKey,TValue}"/>. Two
+/// instances are equal exactly when they represent the same identity.
+/// </remarks>
+public sealed class PqIdentityPublicKey : IEquatable<PqIdentityPublicKey>
 {
     private readonly byte[] _publicKey;
+    private string? _cachedFingerprint;
 
     internal PqIdentityPublicKey(byte[] publicKey)
     {
@@ -47,12 +53,11 @@ public sealed class PqIdentityPublicKey
 
     /// <summary>
     /// A SHA-256 fingerprint of the public key, formatted as lowercase hex. Useful for out-of-band
-    /// verification ("does the server's fingerprint match what I pinned?").
+    /// verification ("does the server's fingerprint match what I pinned?"). Cached after first call.
     /// </summary>
     public string Fingerprint()
     {
-        var hash = SHA256.HashData(_publicKey);
-        return Convert.ToHexString(hash).ToLowerInvariant();
+        return _cachedFingerprint ??= Convert.ToHexString(SHA256.HashData(_publicKey)).ToLowerInvariant();
     }
 
     /// <summary>
@@ -61,10 +66,35 @@ public sealed class PqIdentityPublicKey
     /// </summary>
     public string ShortFingerprint()
     {
-        var hash = SHA256.HashData(_publicKey);
-        var hex = Convert.ToHexString(hash, 0, 8).ToLowerInvariant();
-        return string.Join(':', Enumerable.Range(0, 8).Select(i => hex.Substring(i * 2, 2)));
+        var hex = Fingerprint();
+        return $"{hex[..2]}:{hex[2..4]}:{hex[4..6]}:{hex[6..8]}:{hex[8..10]}:{hex[10..12]}:{hex[12..14]}:{hex[14..16]}";
     }
+
+    /// <summary>Returns a short, log-friendly representation: <c>pq:&lt;short-fingerprint&gt;</c>.</summary>
+    public override string ToString() => $"pq:{ShortFingerprint()}";
+
+    /// <inheritdoc />
+    public bool Equals(PqIdentityPublicKey? other)
+        => other is not null && CryptographicOperations.FixedTimeEquals(_publicKey, other._publicKey);
+
+    /// <inheritdoc />
+    public override bool Equals(object? obj) => obj is PqIdentityPublicKey other && Equals(other);
+
+    /// <inheritdoc />
+    public override int GetHashCode()
+    {
+        // Use the first 4 bytes of the SHA-256 fingerprint — it is already cached and produces a
+        // well-distributed hash for collection keys without exposing the underlying public key.
+        var fp = Fingerprint();
+        return HashCode.Combine(fp[0], fp[1], fp[2], fp[3], fp[4], fp[5], fp[6], fp[7]);
+    }
+
+    /// <summary>Constant-time equality of two pinned public keys.</summary>
+    public static bool operator ==(PqIdentityPublicKey? left, PqIdentityPublicKey? right)
+        => left is null ? right is null : left.Equals(right);
+
+    /// <summary>Inverse of <see cref="op_Equality"/>.</summary>
+    public static bool operator !=(PqIdentityPublicKey? left, PqIdentityPublicKey? right) => !(left == right);
 
     internal ReadOnlySpan<byte> Bytes => _publicKey;
 
