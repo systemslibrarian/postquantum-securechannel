@@ -19,8 +19,43 @@ public enum PqReplayProtection
 /// <summary>Per-endpoint session tuning. These choices are local; they are not negotiated with the peer.</summary>
 public sealed class PqSessionOptions
 {
-    /// <summary>The default options: strict in-order delivery.</summary>
+    /// <summary>The default options: strict in-order delivery, manual rekey.</summary>
     public static PqSessionOptions Default { get; } = new();
+
+    /// <summary>
+    /// A balanced preset for typical long-lived TCP connections: strict ordering + the recommended
+    /// automatic rekey thresholds (<see cref="PqKeyUpdatePolicy.Recommended"/>).
+    /// </summary>
+    public static PqSessionOptions Recommended { get; } = new()
+    {
+        ReplayProtection = PqReplayProtection.StrictOrdered,
+        KeyUpdatePolicy = PqKeyUpdatePolicy.Recommended,
+    };
+
+    /// <summary>
+    /// A preset for unordered/lossy transports (UDP-style, message queues): a sliding-window replay
+    /// filter sized at 128 and the recommended automatic rekey thresholds.
+    /// </summary>
+    public static PqSessionOptions UnorderedTransport { get; } = new()
+    {
+        ReplayProtection = PqReplayProtection.SlidingWindow,
+        ReplayWindowSize = 128,
+        KeyUpdatePolicy = PqKeyUpdatePolicy.Recommended,
+    };
+
+    /// <summary>
+    /// A preset for very high-throughput streams: ratchet less often (32M records / 16 GiB per epoch)
+    /// to reduce ratchet overhead, still well inside NIST's deterministic-IV bound. Strict ordering.
+    /// </summary>
+    public static PqSessionOptions HighThroughput { get; } = new()
+    {
+        ReplayProtection = PqReplayProtection.StrictOrdered,
+        KeyUpdatePolicy = new PqKeyUpdatePolicy
+        {
+            MaxRecordsBeforeUpdate = 1UL << 25,
+            MaxBytesBeforeUpdate = 1UL << 34,
+        },
+    };
 
     /// <summary>Receive-side replay/reordering policy. Defaults to <see cref="PqReplayProtection.StrictOrdered"/>.</summary>
     public PqReplayProtection ReplayProtection { get; init; } = PqReplayProtection.StrictOrdered;

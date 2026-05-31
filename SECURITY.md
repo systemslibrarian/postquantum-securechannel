@@ -5,7 +5,7 @@ transparent about both its strengths and its limits.
 
 ## Status
 
-**This is a preview (0.2.0-preview.1) and has not undergone an independent security audit.** The
+**This is a preview (0.2.1-preview.1) and has not undergone an independent security audit.** The
 cryptographic core is validated against published IETF/NIST test vectors, but absence of a finding is
 not a proof of security. Do not rely on it as your sole protection for high-value secrets until it has
 been independently reviewed. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for specifics.
@@ -14,7 +14,8 @@ been independently reviewed. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for specifics.
 
 | Version | Supported |
 | --- | --- |
-| 0.1.x-preview | ✅ (pre-release, best-effort) |
+| 0.2.x-preview | ✅ (pre-release, best-effort) |
+| 0.1.x-preview | ❌ (superseded; wire format changed in 0.2) |
 
 Until 1.0, only the latest preview is supported. APIs and the wire format may change between previews.
 

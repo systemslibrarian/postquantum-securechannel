@@ -1,7 +1,7 @@
 # PostQuantum.SecureChannel — Protocol Specification (v1)
 
 This document describes the wire protocol and key schedule for PostQuantum.SecureChannel protocol
-version `1` (library `0.2.0-preview.1`). It is intended to be precise enough to audit and to
+version `1` (library `0.2.1-preview.1`). It is intended to be precise enough to audit and to
 reimplement.
 
 > **Pre-1.0:** this format may change between preview releases. The wire format changed between 0.1.x
@@ -144,7 +144,11 @@ tag:        16 bytes
 - **AEAD associated data** = `format ‖ contentType ‖ sequence ‖ callerAad`.
 - **Replay/order**: strict mode requires `sequence == expectedNext`; sliding-window mode accepts any
   in-window, not-yet-seen sequence and rejects replays and records older than the window.
-- Sending more than `2^48` records in one epoch is refused (perform a key update first).
+- **Per-epoch hard caps** matching NIST SP 800-38D: sending more than `2^32` records, or encrypting
+  more than `2^36` plaintext bytes, in one epoch is refused with `PqEpochExhaustedException`
+  (perform a key update first). `PqSession.NeedsKeyUpdate` trips inside a 1/256th safety margin of
+  either cap.
+- **Per-record cap**: a single record's plaintext must not exceed `2^30` bytes (1 GiB).
 
 Directions are independent: client→server and server→client have separate traffic secrets, nonce
 prefixes, sequence counters, and epochs.

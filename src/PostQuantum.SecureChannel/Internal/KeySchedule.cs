@@ -7,9 +7,10 @@ namespace PostQuantum.SecureChannel.Internal;
 /// nonces, the handshake transcript, and an optional resumption pre-shared secret &#8212; into
 /// per-direction traffic secrets, Finished-MAC keys, and an exported resumption secret.
 /// </summary>
-internal sealed class KeySchedule
+internal sealed class KeySchedule : IDisposable
 {
     private const int SecretSize = 32;
+    private bool _disposed;
 
     internal byte[] ClientToServerTrafficSecret { get; }
     internal byte[] ServerToClientTrafficSecret { get; }
@@ -53,8 +54,24 @@ internal sealed class KeySchedule
         }
         finally
         {
+            CryptographicOperations.ZeroMemory(salt);
             CryptographicOperations.ZeroMemory(master);
             CryptographicOperations.ZeroMemory(prk);
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        CryptographicOperations.ZeroMemory(ClientToServerTrafficSecret);
+        CryptographicOperations.ZeroMemory(ServerToClientTrafficSecret);
+        CryptographicOperations.ZeroMemory(ClientFinishedKey);
+        CryptographicOperations.ZeroMemory(ServerFinishedKey);
+        CryptographicOperations.ZeroMemory(ResumptionSecret);
+        _disposed = true;
     }
 }

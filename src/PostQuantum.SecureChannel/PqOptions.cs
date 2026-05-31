@@ -4,11 +4,25 @@ namespace PostQuantum.SecureChannel;
 public sealed class PqClientOptions
 {
     /// <summary>
-    /// The server's pinned identity public key. Required: the client authenticates the server by
-    /// verifying the handshake signature against this key, which defeats man-in-the-middle attacks.
-    /// Distribute it out of band and compare its <see cref="PqIdentityPublicKey.Fingerprint"/>.
+    /// The server's pinned identity public key. Required unless <see cref="AllowedServerIdentities"/>
+    /// is provided. The client authenticates the server by verifying the handshake signature against a
+    /// pinned key, which defeats man-in-the-middle attacks. Distribute it out of band and compare its
+    /// <see cref="PqIdentityPublicKey.Fingerprint"/>.
     /// </summary>
-    public required PqIdentityPublicKey ServerIdentity { get; init; }
+    public PqIdentityPublicKey? ServerIdentity { get; init; }
+
+    /// <summary>
+    /// An optional set of additional pinned server identities. The handshake succeeds if the server's
+    /// advertised identity equals <see cref="ServerIdentity"/> or any entry in this collection. Use
+    /// this to support staged key rotation: trust both the old and the new server identity during the
+    /// overlap window, then drop the old one once all servers have rolled.
+    /// </summary>
+    /// <remarks>
+    /// If <see cref="ServerIdentity"/> is <see langword="null"/> and this collection is non-empty, the
+    /// server <em>must</em> advertise its identity public key in the <c>ServerHello</c> so the client
+    /// knows which pin to verify against.
+    /// </remarks>
+    public IReadOnlyCollection<PqIdentityPublicKey>? AllowedServerIdentities { get; init; }
 
     /// <summary>
     /// An optional client identity. Supply it for mutual authentication, when the server is configured

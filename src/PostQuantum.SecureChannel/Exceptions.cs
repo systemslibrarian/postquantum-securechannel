@@ -45,3 +45,20 @@ public sealed class PqDecryptionException : PqSecureChannelException
     /// <summary>Initializes a new instance with a message and an inner exception.</summary>
     public PqDecryptionException(string message, Exception innerException) : base(message, innerException) { }
 }
+
+/// <summary>
+/// Thrown when the send direction has reached the configured per-epoch hard cap (records sent or
+/// plaintext bytes encrypted). The caller must perform a key update (or re-handshake) before sending
+/// further data; the receive direction is unaffected.
+/// </summary>
+/// <remarks>
+/// The default caps match NIST SP 800-38D's safety bounds for AES-256-GCM under deterministic IVs
+/// (<see cref="PqSession.MaxRecordsPerEpoch"/> records, <see cref="PqSession.MaxBytesPerEpoch"/> bytes).
+/// Reaching them indicates the application sent further than a single key should ever protect; the
+/// remedy is to ratchet, not to ignore.
+/// </remarks>
+public sealed class PqEpochExhaustedException : PqSecureChannelException
+{
+    /// <summary>Initializes a new instance with a message.</summary>
+    public PqEpochExhaustedException(string message) : base(message) { }
+}

@@ -15,12 +15,12 @@
   <!-- ============================ NuGet packaging metadata ============================ -->
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel</PackageId>
-    <Version>0.2.0-preview.1</Version>
-    <PackageReleaseNotes>0.2.0-preview.1: Adds in-band key update (rekey), DTLS-style sliding-window anti-replay, an async PqSecureChannelStream transport adapter, protocol version negotiation, an experimental resumption secret, and expanded test coverage (X-Wing KAT vectors + parser fuzzing). Wire format changed from 0.1.x and is not backward compatible.</PackageReleaseNotes>
+    <Version>0.2.1-preview.1</Version>
+    <PackageReleaseNotes>0.2.1-preview.1: Hardening + ergonomics release (wire-compatible with 0.2.0). Replaces the HashSet-backed sliding-window replay filter with a fixed-size bitmap (DoS-resistant); tightens AES-GCM record cap to NIST 2^32 and adds a 2^36-byte per-epoch budget with a dedicated PqEpochExhaustedException; adds AllowedServerIdentities for staged identity rotation; adds named PqSessionOptions presets (Recommended, UnorderedTransport, HighThroughput); adds built-in observability via PqDiagnostics (EventSource + Meter); makes PqClientHandshake and PqServerHandshake IDisposable so aborted handshakes no longer leak ephemeral keys.</PackageReleaseNotes>
     <Authors>Paul Clark</Authors>
     <Company>Paul Clark</Company>
     <Product>PostQuantum.SecureChannel</Product>
-    <Description>A clean, high-level post-quantum secure channel and session-encryption library for .NET. Establishes mutually-verifiable, authenticated sessions using X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA signatures, then protects application traffic with AES-256-GCM. Secure-by-default, dependency-light, and built for client/server, microservice, and long-lived connection scenarios.</Description>
+    <Description>A clean, high-level post-quantum secure channel and session-encryption library for .NET. Establishes mutually-verifiable, authenticated sessions using X-Wing hybrid key agreement (ML-KEM-768 + X25519) and ML-DSA signatures, then protects application traffic with AES-256-GCM. Secure-by-default, dependency-light, with built-in observability for client/server, microservice, and long-lived connection scenarios.</Description>
     <Summary>Hybrid post-quantum secure channel (X-Wing + ML-DSA) with authenticated, replay-resistant AES-256-GCM sessions for .NET 8/9/10.</Summary>
     <PackageTags>post-quantum;pqc;cryptography;x-wing;xwing;ml-kem;ml-dsa;kyber;dilithium;secure-channel;session;hybrid;kem;encryption;aes-gcm;net10</PackageTags>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

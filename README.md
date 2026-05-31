@@ -27,10 +27,10 @@ It combines:
         └──────────  AES-256-GCM session records  ────────────┘
 ```
 
-> ⚠️ **Preview release (0.2.0-preview.1).** The cryptographic core is validated against published
+> ⚠️ **Preview release (0.2.1-preview.1).** The cryptographic core is validated against published
 > IETF/NIST test vectors, but this library has **not** had an independent security audit. Please read
-> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) before using it for anything that matters. The wire format changed
-> in 0.2 and is **not** compatible with 0.1.x.
+> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) before using it for anything that matters. The wire format is
+> stable across the 0.2.x line; 0.2.x is **not** compatible with 0.1.x.
 
 ---
 
@@ -51,10 +51,25 @@ still protects you. You only lose if **both** fall.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.SecureChannel --version 0.2.0-preview.1
+dotnet add package PostQuantum.SecureChannel --version 0.2.1-preview.1
 ```
 
 Targets `net8.0`, `net9.0`, and `net10.0`.
+
+### What's new in 0.2.1
+
+- **DoS-resistant sliding-window replay filter** — the window is now a fixed-size bitmap allocated
+  at session construction; a peer cannot push the receiver into unbounded memory growth.
+- **AES-GCM safety bounds enforced** — `MaxRecordsPerEpoch` tightened to `2^32` (NIST SP 800-38D
+  deterministic-IV cap) plus a new `2^36`-byte per-epoch budget; both raise a dedicated
+  `PqEpochExhaustedException` if hit.
+- **Multi-pinned server identities** — `PqClientOptions.AllowedServerIdentities` supports staged
+  identity rotation (trust both the old and new key during overlap).
+- **Named session presets** — `PqSessionOptions.{Default,Recommended,UnorderedTransport,HighThroughput}`.
+- **Built-in observability** — `PqDiagnostics` exposes an `EventSource` and a `Meter`
+  (`PostQuantum.SecureChannel`) with counters for handshakes, replays, rekeys, and exhausted epochs.
+- **Aborted handshakes no longer leak ephemeral keys** — `PqClientHandshake` and `PqServerHandshake`
+  now implement `IDisposable`.
 
 ### What's new in 0.2
 
@@ -255,6 +270,57 @@ var options = new PqServerOptions
 
 In-window, not-yet-seen records are accepted in any order; replays and records older than the window
 are rejected.
+
+---
+
+## Rotating the server identity
+
+Real deployments rotate keys. Pin both during the overlap window, then drop the old one once every
+server has rolled:
+
+```csharp
+var client = PqSecureChannel.CreateClient(new PqClientOptions
+{
+    ServerIdentity = newKey,                          // the key you're rolling toward
+    AllowedServerIdentities = [oldKey, newKey],       // accept either while rolling
+});
+```
+
+A client that sees a server still presenting the old key succeeds; a server presenting an unrelated
+key still fails with `PqAuthenticationException`.
+
+---
+
+## Observability
+
+Every handshake outcome, replay rejection, key update, and exhausted epoch is emitted on both an
+`EventSource` (`PostQuantum.SecureChannel`) and a `Meter` of the same name — no extra logging
+dependencies, no configuration to enable.
+
+```bash
+# Live counters in a terminal:
+dotnet-counters monitor --counters PostQuantum.SecureChannel
+
+# Capture a trace for PerfView/Speedscope:
+dotnet-trace collect --providers PostQuantum.SecureChannel
+```
+
+Counters emitted (tagged with role/reason/direction where relevant):
+`pqsc.handshakes.started`, `pqsc.handshakes.completed`, `pqsc.handshakes.failed`,
+`pqsc.records.rejected`, `pqsc.key_updates.sent`, `pqsc.key_updates.received`,
+`pqsc.epochs.exhausted`. OpenTelemetry consumers can subscribe to the `Meter` directly.
+
+---
+
+## Pick a session preset
+
+For most callers the named presets on `PqSessionOptions` remove the need to hand-tune anything:
+
+```csharp
+SessionOptions = PqSessionOptions.Recommended       // long-lived TCP with auto-rekey
+SessionOptions = PqSessionOptions.UnorderedTransport // UDP-style / message queues
+SessionOptions = PqSessionOptions.HighThroughput    // larger rekey thresholds
+```
 
 ---
 

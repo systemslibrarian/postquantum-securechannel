@@ -2,7 +2,7 @@
 
 I would rather you know exactly what this library does and does not do than discover it the hard way.
 This document is a deliberately candid account of the current state of PostQuantum.SecureChannel
-(0.2.0-preview.1). None of these are hidden; they are design boundaries, deferred work, or honest
+(0.2.1-preview.1). None of these are hidden; they are design boundaries, deferred work, or honest
 caveats.
 
 If any of these gaps blocks your use case, please open an issue — it helps prioritize.
@@ -35,19 +35,22 @@ but version negotiation itself is not implemented.
 
 `PqSession` defaults to enforcing a **strictly increasing per-direction sequence number**, which
 assumes an in-order, reliable transport such as TCP. For unordered/lossy transports you can opt into a
-DTLS/IPsec-style **sliding window** (`PqReplayProtection.SlidingWindow`). Caveats: the window is an
-in-memory `HashSet`-backed filter (simple, not the most compact possible), it is per-epoch (a key
-update resets it), and records from a previous epoch that arrive after a key update are dropped. There
-is still no message-loss recovery — the channel does not retransmit.
+DTLS/IPsec-style **sliding window** (`PqReplayProtection.SlidingWindow`). As of 0.2.1 the window is a
+fixed-size bitmap allocated once at session construction — its memory footprint is bounded by
+`ReplayWindowSize` and cannot be influenced by a peer's sequence-number choices. It is still
+per-epoch (a key update resets it), and records from a previous epoch that arrive after a key update
+are dropped. There is no message-loss recovery — the channel does not retransmit.
 
 ## 5. Rekeying is manual; resumption is experimental
 
 In-band **key update** is supported (`PqSession.UpdateSendKey` / `PqSecureChannelStream.UpdateSendKeyAsync`):
-each direction can ratchet to fresh keys without a new handshake. There is a hard cap of `2^48` records
-**per epoch** (`PqSession.MaxRecordsPerEpoch`); after that you must key-update or re-handshake. A
-record/byte-threshold **auto-rekey policy** (`PqKeyUpdatePolicy`) is available and honoured by the stream
-adapter, but it is **count-based, not time-based** — there is no built-in periodic/timer rekey, and a
-key update is only emitted when you next send (it does not proactively rekey an idle connection).
+each direction can ratchet to fresh keys without a new handshake. The hard caps per epoch are now
+`PqSession.MaxRecordsPerEpoch = 2^32` (matching NIST SP 800-38D's deterministic-IV invocation cap)
+and `PqSession.MaxBytesPerEpoch = 2^36` (~64 GiB, the AES-GCM data bound); exceeding either raises
+`PqEpochExhaustedException`. A record/byte-threshold **auto-rekey policy** (`PqKeyUpdatePolicy`) is
+available and honoured by the stream adapter, but it is **count-based, not time-based** — there is
+no built-in periodic/timer rekey, and a key update is only emitted when you next send (it does not
+proactively rekey an idle connection).
 
 **Resumption** (`ResumptionSecret`) is **experimental**. It mixes a shared secret into the key schedule
 of a *full* (still forward-secret) handshake to bind sessions together; it does **not** provide a
@@ -68,9 +71,11 @@ connection lifecycle, timeouts, and back-pressure.
 ## 7. Identity trust is your responsibility (no PKI)
 
 Authentication is via **raw-key pinning**: the client must obtain and pin the server's
-`PqIdentityPublicKey` out of band, and (for mutual auth) the server pins/allowlists client keys. There
-is **no certificate chain, no CA, no revocation, and no expiry**. If a private identity seed is
-compromised, you must rotate it and redistribute the public key yourself.
+`PqIdentityPublicKey` out of band, and (for mutual auth) the server pins/allowlists client keys.
+As of 0.2.1, clients can pin multiple server identities at once via
+`PqClientOptions.AllowedServerIdentities` to support staged rotation. There is **no certificate
+chain, no CA, no revocation, and no expiry**. If a private identity seed is compromised, you must
+rotate it and redistribute the public key yourself.
 
 ## 8. Side-channel resistance is inherited, not independently verified
 

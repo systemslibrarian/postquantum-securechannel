@@ -44,6 +44,21 @@ public class XWingTests
     }
 
     [Fact]
+    public void PublicKey_ReturnsDefensiveCopy()
+    {
+        using var keyPair = XWing.GenerateKeyPair();
+
+        var first = keyPair.PublicKey;
+        var originalFirstByte = first[0];
+        first[0] ^= 0xff;
+
+        var second = keyPair.PublicKey;
+
+        Assert.Equal(originalFirstByte, second[0]);
+        Assert.NotEqual(first[0], second[0]);
+    }
+
+    [Fact]
     public void DifferentKeyPair_ProducesDifferentSecret()
     {
         using var alice = XWing.GenerateKeyPair();

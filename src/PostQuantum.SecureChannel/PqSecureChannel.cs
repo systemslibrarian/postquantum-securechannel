@@ -24,7 +24,13 @@ public static partial class PqSecureChannel
     public static PqClientHandshake CreateClient(PqClientOptions options)
     {
         ArgumentNullException.ThrowIfNull(options);
-        ArgumentNullException.ThrowIfNull(options.ServerIdentity);
+        if (options.ServerIdentity is null && (options.AllowedServerIdentities is null || options.AllowedServerIdentities.Count == 0))
+        {
+            throw new ArgumentException(
+                $"At least one pinned server identity must be supplied via {nameof(PqClientOptions.ServerIdentity)} or {nameof(PqClientOptions.AllowedServerIdentities)}.",
+                nameof(options));
+        }
+
         options.SessionOptions.Validate();
         return new PqClientHandshake(options);
     }
@@ -41,26 +47,30 @@ public static partial class PqSecureChannel
 
 /// <summary>
 /// The client side of a handshake. Single-use and not thread-safe: call
-/// <see cref="CreateClientHello"/> then <see cref="ProcessServerHello"/>, in order.
+/// <see cref="CreateClientHello"/> then <see cref="ProcessServerHello"/>, in order. Dispose to zero
+/// the ephemeral private key even when the handshake is abandoned mid-flight.
 /// </summary>
-public sealed class PqClientHandshake
+public sealed class PqClientHandshake : IDisposable
 {
     private readonly PqClientOptions _options;
     private XWingKeyPair? _keyPair;
     private byte[]? _clientRandom;
     private byte[]? _clientHelloBytes;
     private bool _completed;
+    private bool _disposed;
 
     internal PqClientHandshake(PqClientOptions options) => _options = options;
 
     /// <summary>Produces the <c>ClientHello</c> bytes to send to the server.</summary>
     public byte[] CreateClientHello()
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_clientHelloBytes is not null)
         {
             throw new InvalidOperationException("ClientHello has already been created.");
         }
 
+        PqDiagnostics.HandshakeStarted(PqRole.Client);
         _keyPair = XWing.GenerateKeyPair();
         _clientRandom = RandomBytes.Create(PqProtocol.RandomSize);
 
@@ -80,6 +90,7 @@ public sealed class PqClientHandshake
     /// </summary>
     public PqClientHandshakeResult ProcessServerHello(ReadOnlySpan<byte> serverHello)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_keyPair is null || _clientRandom is null || _clientHelloBytes is null)
         {
             throw new InvalidOperationException("Call CreateClientHello before ProcessServerHello.");
@@ -90,61 +101,142 @@ public sealed class PqClientHandshake
             throw new InvalidOperationException("This handshake has already completed.");
         }
 
-        var sh = ServerHello.Parse(serverHello);
-
-        // The server must have chosen a version we offered and still support.
-        if (Array.IndexOf(PqProtocol.SupportedVersions, sh.NegotiatedVersion) < 0)
+        ServerHello sh;
+        try
         {
-            throw new PqProtocolException(
-                $"Server negotiated unsupported protocol version {sh.NegotiatedVersion}.");
+            sh = ServerHello.Parse(serverHello);
+        }
+        catch (PqSecureChannelException ex)
+        {
+            PqDiagnostics.HandshakeFailed(PqRole.Client, "server-hello-malformed");
+            throw new PqProtocolException("Malformed ServerHello.", ex);
         }
 
-        var serverHelloBody = sh.SerializeBody();
-        var h1 = Transcript.Hash(_clientHelloBytes, serverHelloBody);
-
-        // Authenticate the server against the pinned identity.
-        var pinned = _options.ServerIdentity;
-        if (sh.ServerIdentityPublicKey.Length > 0
-            && !CryptographicOperations.FixedTimeEquals(sh.ServerIdentityPublicKey, pinned.Bytes))
+        try
         {
-            throw new PqAuthenticationException("ServerHello identity does not match the pinned server identity.");
+            // The server must have chosen a version we offered and still support.
+            if (Array.IndexOf(PqProtocol.SupportedVersions, sh.NegotiatedVersion) < 0)
+            {
+                PqDiagnostics.HandshakeFailed(PqRole.Client, "version-mismatch");
+                throw new PqProtocolException(
+                    $"Server negotiated unsupported protocol version {sh.NegotiatedVersion}.");
+            }
+
+            var serverHelloBody = sh.SerializeBody();
+            var h1 = Transcript.Hash(_clientHelloBytes, serverHelloBody);
+
+            var pinned = ResolveServerIdentity(sh);
+            if (!pinned.Verify(Transcript.SignedPayload(PqProtocol.ServerAuthContext, h1), sh.Signature))
+            {
+                PqDiagnostics.HandshakeFailed(PqRole.Client, "server-signature-invalid");
+                throw new PqAuthenticationException("Server signature verification failed.");
+            }
+
+            // Recover the shared secret and derive the session keys (mixing the resumption secret if present).
+            var sharedSecret = _keyPair.Decapsulate(sh.KemCiphertext);
+            var schedule = KeySchedule.Derive(
+                sharedSecret, _clientRandom, sh.ServerRandom, h1, _options.ResumptionSecret);
+            CryptographicOperations.ZeroMemory(sharedSecret);
+
+            var h2 = Transcript.Hash(_clientHelloBytes, sh.Serialize());
+            var finishedMac = Transcript.FinishedMac(schedule.ClientFinishedKey, h2);
+
+            // Optional client authentication.
+            byte[] clientIdentityBytes = [];
+            byte[] clientSignature = [];
+            bool mutual = false;
+            if (_options.ClientIdentity is { } clientIdentity)
+            {
+                clientIdentityBytes = clientIdentity.PublicKey.Export();
+                clientSignature = clientIdentity.Sign(Transcript.SignedPayload(PqProtocol.ClientAuthContext, h2));
+                mutual = true;
+            }
+
+            var finished = new ClientFinished
+            {
+                ClientIdentityPublicKey = clientIdentityBytes,
+                ClientSignature = clientSignature,
+                FinishedMac = finishedMac,
+            };
+
+            _keyPair.Dispose();
+            _keyPair = null;
+            _completed = true;
+
+            var session = new PqSession(PqRole.Client, schedule, pinned, _options.SessionOptions);
+            schedule.Dispose(); // session has its own clones of the secrets it needs
+            PqDiagnostics.HandshakeCompleted(PqRole.Client, _options.ResumptionSecret is { Length: > 0 }, mutual);
+            return new PqClientHandshakeResult(session, finished.Serialize());
+        }
+        catch (PqSecureChannelException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            PqDiagnostics.HandshakeFailed(PqRole.Client, "unexpected-error");
+            throw new PqProtocolException("Unexpected error while processing ServerHello.", ex);
+        }
+    }
+
+    private PqIdentityPublicKey ResolveServerIdentity(ServerHello sh)
+    {
+        // Build the set of acceptable identities from both ServerIdentity (primary) and AllowedServerIdentities.
+        var primary = _options.ServerIdentity;
+        var extras = _options.AllowedServerIdentities;
+
+        // If the server advertised an identity, it must equal one of our pinned keys (constant-time per pin).
+        if (sh.ServerIdentityPublicKey.Length > 0)
+        {
+            if (primary is not null
+                && CryptographicOperations.FixedTimeEquals(sh.ServerIdentityPublicKey, primary.Bytes))
+            {
+                return primary;
+            }
+
+            if (extras is not null)
+            {
+                foreach (var candidate in extras)
+                {
+                    if (CryptographicOperations.FixedTimeEquals(sh.ServerIdentityPublicKey, candidate.Bytes))
+                    {
+                        return candidate;
+                    }
+                }
+            }
+
+            PqDiagnostics.HandshakeFailed(PqRole.Client, "server-identity-not-pinned");
+            throw new PqAuthenticationException("ServerHello identity does not match any pinned server identity.");
         }
 
-        if (!pinned.Verify(Transcript.SignedPayload(PqProtocol.ServerAuthContext, h1), sh.Signature))
+        // No advertised identity: fall back to the primary pin (single-pin compatibility).
+        if (primary is not null)
         {
-            throw new PqAuthenticationException("Server signature verification failed.");
+            return primary;
         }
 
-        // Recover the shared secret and derive the session keys (mixing the resumption secret if present).
-        var sharedSecret = _keyPair.Decapsulate(sh.KemCiphertext);
-        var schedule = KeySchedule.Derive(
-            sharedSecret, _clientRandom, sh.ServerRandom, h1, _options.ResumptionSecret);
-        CryptographicOperations.ZeroMemory(sharedSecret);
+        // Multi-pin only and no advertised key: cannot decide which pin to verify against.
+        PqDiagnostics.HandshakeFailed(PqRole.Client, "server-identity-missing");
+        throw new PqAuthenticationException(
+            "Server did not advertise an identity public key; cannot select among multiple pinned identities.");
+    }
 
-        var h2 = Transcript.Hash(_clientHelloBytes, sh.Serialize());
-        var finishedMac = Transcript.FinishedMac(schedule.ClientFinishedKey, h2);
-
-        // Optional client authentication.
-        byte[] clientIdentityBytes = [];
-        byte[] clientSignature = [];
-        if (_options.ClientIdentity is { } clientIdentity)
+    /// <summary>Zeroes any ephemeral key material still held by this handshake.</summary>
+    public void Dispose()
+    {
+        if (_disposed)
         {
-            clientIdentityBytes = clientIdentity.PublicKey.Export();
-            clientSignature = clientIdentity.Sign(Transcript.SignedPayload(PqProtocol.ClientAuthContext, h2));
+            return;
         }
 
-        var finished = new ClientFinished
+        _keyPair?.Dispose();
+        _keyPair = null;
+        if (_clientRandom is not null)
         {
-            ClientIdentityPublicKey = clientIdentityBytes,
-            ClientSignature = clientSignature,
-            FinishedMac = finishedMac,
-        };
+            CryptographicOperations.ZeroMemory(_clientRandom);
+        }
 
-        _keyPair.Dispose();
-        _completed = true;
-
-        var session = new PqSession(PqRole.Client, schedule, pinned, _options.SessionOptions);
-        return new PqClientHandshakeResult(session, finished.Serialize());
+        _disposed = true;
     }
 }
 
@@ -166,32 +258,47 @@ public sealed class PqClientHandshakeResult
 
 /// <summary>
 /// The server side of a handshake. Single-use and not thread-safe: call
-/// <see cref="ProcessClientHello"/> then <see cref="ProcessClientFinished"/>, in order.
+/// <see cref="ProcessClientHello"/> then <see cref="ProcessClientFinished"/>, in order. Dispose to
+/// zero the partial key schedule even when the handshake is abandoned mid-flight.
 /// </summary>
-public sealed class PqServerHandshake
+public sealed class PqServerHandshake : IDisposable
 {
     private readonly PqServerOptions _options;
     private KeySchedule? _schedule;
     private byte[]? _confirmationHash; // h2
     private bool _helloProcessed;
     private bool _completed;
+    private bool _disposed;
 
     internal PqServerHandshake(PqServerOptions options) => _options = options;
 
     /// <summary>Processes the client's <c>ClientHello</c> and returns the <c>ServerHello</c> bytes to send back.</summary>
     public byte[] ProcessClientHello(ReadOnlySpan<byte> clientHello)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_helloProcessed)
         {
             throw new InvalidOperationException("ClientHello has already been processed.");
         }
 
+        PqDiagnostics.HandshakeStarted(PqRole.Server);
+
         var clientHelloBytes = clientHello.ToArray();
-        var ch = ClientHello.Parse(clientHelloBytes);
+        ClientHello ch;
+        try
+        {
+            ch = ClientHello.Parse(clientHelloBytes);
+        }
+        catch (PqSecureChannelException)
+        {
+            PqDiagnostics.HandshakeFailed(PqRole.Server, "client-hello-malformed");
+            throw;
+        }
 
         var negotiated = PqProtocol.NegotiateVersion(ch.SupportedVersions);
         if (negotiated == 0)
         {
+            PqDiagnostics.HandshakeFailed(PqRole.Server, "version-no-overlap");
             throw new PqProtocolException("No mutually supported protocol version was offered by the client.");
         }
 
@@ -227,6 +334,7 @@ public sealed class PqServerHandshake
     /// </summary>
     public PqSession ProcessClientFinished(ReadOnlySpan<byte> clientFinished)
     {
+        ObjectDisposedException.ThrowIf(_disposed, this);
         if (_schedule is null || _confirmationHash is null)
         {
             throw new InvalidOperationException("Call ProcessClientHello before ProcessClientFinished.");
@@ -237,18 +345,35 @@ public sealed class PqServerHandshake
             throw new InvalidOperationException("This handshake has already completed.");
         }
 
-        var cf = ClientFinished.Parse(clientFinished);
+        ClientFinished cf;
+        try
+        {
+            cf = ClientFinished.Parse(clientFinished);
+        }
+        catch (PqSecureChannelException)
+        {
+            PqDiagnostics.HandshakeFailed(PqRole.Server, "client-finished-malformed");
+            throw;
+        }
 
         var expectedMac = Transcript.FinishedMac(_schedule.ClientFinishedKey, _confirmationHash);
         if (!CryptographicOperations.FixedTimeEquals(cf.FinishedMac, expectedMac))
         {
+            PqDiagnostics.HandshakeFailed(PqRole.Server, "client-finished-mac-invalid");
             throw new PqAuthenticationException("Client key confirmation (Finished MAC) failed.");
         }
 
         var clientIdentity = VerifyClientAuthentication(cf);
 
         _completed = true;
-        return new PqSession(PqRole.Server, _schedule, clientIdentity, _options.SessionOptions);
+        var session = new PqSession(PqRole.Server, _schedule, clientIdentity, _options.SessionOptions);
+        _schedule.Dispose(); // session has its own clones of the secrets it needs
+        _schedule = null;
+        PqDiagnostics.HandshakeCompleted(
+            PqRole.Server,
+            _options.ResumptionSecret is { Length: > 0 },
+            clientIdentity is not null);
+        return session;
     }
 
     private PqIdentityPublicKey? VerifyClientAuthentication(ClientFinished cf)
@@ -257,6 +382,7 @@ public sealed class PqServerHandshake
         {
             if (_options.RequireClientAuthentication)
             {
+                PqDiagnostics.HandshakeFailed(PqRole.Server, "client-auth-required");
                 throw new PqAuthenticationException("Client authentication is required but none was provided.");
             }
 
@@ -270,24 +396,55 @@ public sealed class PqServerHandshake
         }
         catch (ArgumentException)
         {
+            PqDiagnostics.HandshakeFailed(PqRole.Server, "client-identity-malformed");
             throw new PqAuthenticationException("Client identity public key is malformed.");
         }
 
         if (!clientIdentity.Verify(
                 Transcript.SignedPayload(PqProtocol.ClientAuthContext, _confirmationHash!), cf.ClientSignature))
         {
+            PqDiagnostics.HandshakeFailed(PqRole.Server, "client-signature-invalid");
             throw new PqAuthenticationException("Client signature verification failed.");
         }
 
         if (_options.AuthorizedClients is { Count: > 0 } allowlist)
         {
             var fingerprint = clientIdentity.Fingerprint();
-            if (!allowlist.Any(a => a.Fingerprint() == fingerprint))
+            bool authorized = false;
+            foreach (var a in allowlist)
             {
+                if (a.Fingerprint() == fingerprint)
+                {
+                    authorized = true;
+                    break;
+                }
+            }
+
+            if (!authorized)
+            {
+                PqDiagnostics.HandshakeFailed(PqRole.Server, "client-not-authorized");
                 throw new PqAuthenticationException("Client identity is not in the authorized clients list.");
             }
         }
 
         return clientIdentity;
+    }
+
+    /// <summary>Zeroes any partial key material still held by this handshake.</summary>
+    public void Dispose()
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _schedule?.Dispose();
+        _schedule = null;
+        if (_confirmationHash is not null)
+        {
+            CryptographicOperations.ZeroMemory(_confirmationHash);
+        }
+
+        _disposed = true;
     }
 }

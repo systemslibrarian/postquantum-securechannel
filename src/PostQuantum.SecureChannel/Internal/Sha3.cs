@@ -17,12 +17,12 @@ internal static class Sha3
             var span = fragment.Span;
             if (span.Length > 0)
             {
-                digest.BlockUpdate(span.ToArray(), 0, span.Length);
+                digest.BlockUpdate(span);
             }
         }
 
         var output = new byte[32];
-        digest.DoFinal(output, 0);
+        digest.DoFinal(output);
         return output;
     }
 
@@ -30,9 +30,9 @@ internal static class Sha3
     internal static byte[] Shake256(ReadOnlySpan<byte> input, int outputLength)
     {
         var digest = new ShakeDigest(256);
-        digest.BlockUpdate(input.ToArray(), 0, input.Length);
+        digest.BlockUpdate(input);
         var output = new byte[outputLength];
-        digest.OutputFinal(output, 0, outputLength);
+        digest.OutputFinal(output);
         return output;
     }
 }

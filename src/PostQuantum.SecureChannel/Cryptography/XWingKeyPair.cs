@@ -13,16 +13,17 @@ namespace PostQuantum.SecureChannel.Cryptography;
 public sealed class XWingKeyPair : IDisposable
 {
     private readonly byte[] _privateSeed;
+    private readonly byte[] _publicKey;
     private bool _disposed;
 
     private XWingKeyPair(byte[] privateSeed, byte[] publicKey)
     {
         _privateSeed = privateSeed;
-        PublicKey = publicKey;
+        _publicKey = (byte[])publicKey.Clone();
     }
 
     /// <summary>The encapsulation (public) key to publish to the peer.</summary>
-    public byte[] PublicKey { get; }
+    public byte[] PublicKey => (byte[])_publicKey.Clone();
 
     /// <summary>Reconstructs a key pair from a previously generated 32-byte seed.</summary>
     public static XWingKeyPair FromSeed(byte[] seed)

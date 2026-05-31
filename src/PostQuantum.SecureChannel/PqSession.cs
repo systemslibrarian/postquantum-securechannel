@@ -63,9 +63,20 @@ public sealed class PqSession : IDisposable
 
     /// <summary>
     /// Maximum number of records that may be sent within a single key epoch before a key update is
-    /// required. Set far below the AES-GCM safety bound; reaching it throws.
+    /// required. Set to <c>2^32</c>, matching NIST SP 800-38D's invocation-count bound for AES-GCM with
+    /// deterministic 96-bit IVs. Reaching it throws <see cref="PqEpochExhaustedException"/>.
     /// </summary>
-    public const ulong MaxRecordsPerEpoch = 1UL << 48;
+    public const ulong MaxRecordsPerEpoch = 1UL << 32;
+
+    /// <summary>
+    /// Maximum number of plaintext bytes that may be encrypted within a single key epoch. Set to
+    /// <c>2^36</c> (64 GiB), the AES-GCM-safe data bound under the same standard. Reaching it throws
+    /// <see cref="PqEpochExhaustedException"/>.
+    /// </summary>
+    public const ulong MaxBytesPerEpoch = 1UL << 36;
+
+    /// <summary>Maximum plaintext bytes accepted by <see cref="Encrypt"/> in a single record (<c>2^30</c>, 1 GiB).</summary>
+    public const int MaxRecordPlaintextSize = 1 << 30;
 
     private readonly DirectionState _send;
     private readonly DirectionState _recv;
@@ -109,11 +120,15 @@ public sealed class PqSession : IDisposable
     public uint ReceiveEpoch => _recv.Epoch;
 
     /// <summary>
-    /// <see langword="true"/> when the configured <see cref="PqKeyUpdatePolicy"/> indicates the send
-    /// direction should ratchet. Call <see cref="UpdateSendKey"/> (the stream adapter does this for you).
-    /// Always <see langword="false"/> when the policy is <see cref="PqKeyUpdatePolicy.Disabled"/>.
+    /// <see langword="true"/> when either the configured <see cref="PqKeyUpdatePolicy"/> threshold has
+    /// been reached, or the send direction is approaching the hard <see cref="MaxRecordsPerEpoch"/> /
+    /// <see cref="MaxBytesPerEpoch"/> caps (within 1/256th). Call <see cref="UpdateSendKey"/>; the
+    /// stream adapter does this for you.
     /// </summary>
-    public bool NeedsKeyUpdate => _keyUpdatePolicy.IsExceededBy(_send.Sequence, _send.BytesThisEpoch);
+    public bool NeedsKeyUpdate =>
+        _keyUpdatePolicy.IsExceededBy(_send.Sequence, _send.BytesThisEpoch)
+        || _send.Sequence >= MaxRecordsPerEpoch - (MaxRecordsPerEpoch >> 8)
+        || _send.BytesThisEpoch >= MaxBytesPerEpoch - (MaxBytesPerEpoch >> 8);
 
     /// <summary>Encrypts application <paramref name="plaintext"/> into a self-framed record.</summary>
     public byte[] Encrypt(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData = default)
@@ -159,6 +174,7 @@ public sealed class PqSession : IDisposable
 
         if (!_recv.IsAcceptable(sequence))
         {
+            PqDiagnostics.RecordRejected(Role, "sequence-replay-or-reorder");
             throw new PqDecryptionException(
                 $"Record sequence {sequence} rejected (replay, reorder, or outside the replay window).");
         }
@@ -178,6 +194,7 @@ public sealed class PqSession : IDisposable
         }
         catch (CryptographicException ex)
         {
+            PqDiagnostics.RecordRejected(Role, "aead-auth-failure");
             throw new PqDecryptionException("Record failed authentication; it may be corrupt or tampered.", ex);
         }
         finally
@@ -194,6 +211,7 @@ public sealed class PqSession : IDisposable
 
             case PqProtocol.RecordKeyUpdate:
                 _recv.Ratchet();
+                PqDiagnostics.KeyUpdated(Role, isReceive: true, _recv.Epoch);
                 CryptographicOperations.ZeroMemory(plaintext);
                 return new PqIncomingRecord(PqContentType.KeyUpdate, []);
 
@@ -212,6 +230,7 @@ public sealed class PqSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         var record = Seal(PqProtocol.RecordKeyUpdate, ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty);
         _send.Ratchet();
+        PqDiagnostics.KeyUpdated(Role, isReceive: false, _send.Epoch);
         return record;
     }
 
@@ -228,10 +247,26 @@ public sealed class PqSession : IDisposable
     private byte[] Seal(byte contentType, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+        if (plaintext.Length > MaxRecordPlaintextSize)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(plaintext),
+                plaintext.Length,
+                $"Plaintext exceeds the {MaxRecordPlaintextSize}-byte per-record limit; split into multiple records.");
+        }
+
         if (_send.Sequence >= MaxRecordsPerEpoch)
         {
-            throw new InvalidOperationException(
-                "Send sequence exhausted for this epoch; call UpdateSendKey before sending more data.");
+            PqDiagnostics.EpochExhausted(Role, isReceive: false, recordCap: true);
+            throw new PqEpochExhaustedException(
+                $"Send sequence exhausted for this epoch ({MaxRecordsPerEpoch} records); call UpdateSendKey before sending more data.");
+        }
+
+        if (_send.BytesThisEpoch + (ulong)plaintext.Length > MaxBytesPerEpoch)
+        {
+            PqDiagnostics.EpochExhausted(Role, isReceive: false, recordCap: false);
+            throw new PqEpochExhaustedException(
+                $"Send byte budget exhausted for this epoch ({MaxBytesPerEpoch} bytes); call UpdateSendKey before sending more data.");
         }
 
         ulong sequence = _send.Sequence;
