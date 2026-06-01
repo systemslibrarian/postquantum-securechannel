@@ -10,6 +10,9 @@ artifacts/
 *.nupkg
 *.snupkg
 .nuget/
+nuget.txt
+nuget-key.txt
+*.apikey
 
 # IDE
 .vs/
