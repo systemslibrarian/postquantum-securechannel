@@ -3,6 +3,13 @@
 What PostQuantum.SecureChannel is designed to defend against, what it is **not** designed to defend
 against, and the assumptions it relies on. Read alongside [`KNOWN-GAPS.md`](../KNOWN-GAPS.md).
 
+> **Caveat on the word "guarantee".** Everything in the "Goals" list below is a **design goal**
+> backed by the project's own test suite, not an audited guarantee. PostQuantum.SecureChannel has
+> not been reviewed by an independent cryptographer. Protocol-composition flaws — wrong transcript
+> binding, HKDF label collision, nonce-reuse across a key update, off-by-one in the replay window —
+> would not be caught by primitive known-answer tests. See [`AUDIT-SCOPE.md`](AUDIT-SCOPE.md) for
+> what an external reviewer should examine and which surfaces are currently covered by tests.
+
 ## Goals (in scope)
 
 When used as documented (server identity pinned out of band, code path follows the public API):
@@ -62,6 +69,10 @@ The guarantees above hold only if:
   Finished MAC fails. This is structural; you do not need to defend it yourself.
 
 ## Adversary capabilities considered
+
+> **Key:** ✅ = designed against and exercised by the test suite in this repository. ❌ = out of
+> scope (see "Non-goals"). ⚠ = best-effort, depending on properties of the underlying primitives
+> and runtime. **No row is "independently verified" — see [`AUDIT-SCOPE.md`](AUDIT-SCOPE.md).**
 
 | Adversary capability                                       | Defended? |
 | ---------------------------------------------------------- | --------- |

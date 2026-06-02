@@ -2,7 +2,7 @@
 
 I would rather you know exactly what this library does and does not do than discover it the hard way.
 This document is a deliberately candid account of the current state of PostQuantum.SecureChannel
-(0.2.1-preview.1). None of these are hidden; they are design boundaries, deferred work, or honest
+(0.3.0-preview.1). None of these are hidden; they are design boundaries, deferred work, or honest
 caveats.
 
 If any of these gaps blocks your use case, please open an issue — it helps prioritize.
@@ -14,15 +14,39 @@ If any of these gaps blocks your use case, please open an issue — it helps pri
 The protocol and code have **not** been reviewed by an independent cryptographer or audit firm. The
 X-Wing combiner is validated byte-for-byte against the published IETF test vectors, and the handshake
 and session layers have a focused test suite — but tests prove the presence of correct behavior, not
-the absence of flaws. **Treat this as preview-quality software.**
+the absence of flaws.
+
+**The specific risk is protocol composition.** Each primitive used here (ML-KEM, ML-DSA, X25519,
+AES-256-GCM, HKDF-SHA256, SHA-3/SHAKE) is vetted and validated. The way they are *wired together* —
+transcript binding, HKDF label choices and domain separation, nonce construction, the three-message
+handshake state machine, the anti-replay window, rekeying — is **this library's own work, and is
+exactly the surface that primitive known-answer tests cannot exercise**. A composition bug here
+(label collision, transcript-equivalence, nonce reuse across a key update, off-by-one in the replay
+bitmap) would pass every primitive KAT and every round-trip test in this repo while still being a
+real flaw. See [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md) for the per-surface coverage map.
+
+**Treat this as preview-quality software.** Recommended use today is evaluation and internal
+deployments where the operator controls both endpoints. For traffic where you cannot personally
+accept the risk of an unreviewed protocol, use TLS 1.3 with a hybrid PQ KEM instead.
 
 ## 2. X-Wing is based on an IETF draft
 
 X-Wing is specified in `draft-connolly-cfrg-xwing-kem` (revision 06 is the pinned reference), which is
 on the standards track but **not yet a final RFC**. The construction is stable and widely implemented,
 and this library matches all three published Known-Answer Test vectors, but the specification could
-still change before final publication. When the RFC is published the implementation will be re-pinned
-to it and the vectors re-validated; until then the wire format may change to track the draft.
+still change before final publication.
+
+**Concrete consequences for adopters:**
+- The X-Wing combiner inputs, order, and domain label (`SHA3-256(ss_M ‖ ss_X ‖ ct_X ‖ pk_X ‖
+  XWingLabel)`) are spec-defined. **If the IETF changes any of those before RFC publication, sessions
+  established with this version of the library will not interoperate with sessions established
+  against the post-RFC version.** There is no cross-version negotiation for the combiner itself.
+- An adopter who deploys 0.3.x widely today and waits for the RFC may face a coordinated cutover.
+  This is one of the reasons the package is `-preview` and stays `-preview` until the RFC settles.
+- When the RFC is published the implementation will be re-pinned to it, the vectors re-validated,
+  the protocol version byte (`PqProtocol.Version`) bumped, and the change called out in the
+  changelog with explicit interop guidance. Until then, **treat the wire format as draft-pinned,
+  not standards-pinned.**
 
 ## 3. Pre-1.0: the wire format and API are not yet stable
 
@@ -113,6 +137,30 @@ Confidentiality is hybrid post-quantum. Authentication uses ML-DSA (post-quantum
 that the **"harvest now, decrypt later"** threat applies to *confidentiality*, which is why hybrid KEM
 matters most today; a forged signature requires a quantum computer *now*, not later. ML-DSA addresses
 this, but as with all of the above, it has not been independently audited in this integration.
+
+## 13. Mid-preview wire-format change inside `0.3.0-preview.1` (v1 → v2)
+
+`PqProtocol.Version` bumped from `1` to `2` inside the `0.3.0-preview.1` window as remediation for an
+external review of the HKDF info construction (Finding 2) and transcript framing (Finding 3). The
+package version stays at `0.3.0-preview.1` because preview tags absorb wire changes at this stage,
+but:
+
+- **Peers built from the pre-remediation snapshot of `0.3.0-preview.1` do not interoperate with
+  peers built from the post-remediation snapshot.** They fail cleanly at version negotiation
+  (`PqProtocolException("No mutually supported protocol version was offered by the client.")`), not
+  silently — but they fail.
+- **0.2.x peers** were already wire-incompatible with the original 0.3.0-preview.1 only at the
+  ecosystem layer; they are now also incompatible at the key-schedule layer. The same clean
+  negotiation failure applies.
+- **Adopter action:** if you have *any* peer running pre-remediation `0.3.0-preview.1`, update both
+  ends before they can talk again. There is no v1↔v2 negotiation path; v1 is treated as unsafe-by-
+  comparison and removed from `SupportedVersions`.
+- **Why this is acceptable in a preview tag:** the package itself documents that pre-1.0 wire
+  formats may change between previews, and the cap on adoption ("evaluation / internal-only")
+  bounds the blast radius to operators who control both endpoints. See `README.md` status banner.
+
+This is a one-time bump tied to the external-review remediation; we do not expect further v2-era
+wire-format changes inside `0.3.0-preview.1`.
 
 ---
 

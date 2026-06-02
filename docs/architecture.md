@@ -93,20 +93,20 @@ ss     = X-Wing shared secret (32 bytes)
 psk    = resumption secret if any (32 bytes)
 salt   = clientRandom ‖ serverRandom ‖ psk
 PRK    = HKDF-Extract(salt, ss)
-master = HKDF-Expand(PRK, "pqsc/v1 master" ‖ transcriptHash, 32)
+master = HKDF-Expand(PRK, "pqsc/v2 master" ‖ transcriptHash, 32)
 
-      ┌─ HKDF-Expand(master, "pqsc/v1 c2s traffic")     → c2s_traffic_secret
-      │     └─ HKDF-Expand(..., "pqsc/v1 key", 32)       → c2s_aead_key
-      │     └─ HKDF-Expand(..., "pqsc/v1 iv", 4)         → c2s_iv_prefix
-      │     └─ HKDF-Expand(..., "pqsc/v1 key update")    → c2s_next_epoch_secret
+      ┌─ HKDF-Expand(master, "pqsc/v2 c2s traffic")     → c2s_traffic_secret
+      │     └─ HKDF-Expand(..., "pqsc/v2 key", 32)       → c2s_aead_key
+      │     └─ HKDF-Expand(..., "pqsc/v2 iv", 4)         → c2s_iv_prefix
+      │     └─ HKDF-Expand(..., "pqsc/v2 key update")    → c2s_next_epoch_secret
       │
-      ├─ HKDF-Expand(master, "pqsc/v1 s2c traffic")     → s2c_traffic_secret (parallel)
-      ├─ HKDF-Expand(master, "pqsc/v1 client finished") → client Finished MAC key
-      ├─ HKDF-Expand(master, "pqsc/v1 server finished") → reserved
-      └─ HKDF-Expand(master, "pqsc/v1 resumption")      → exportable resumption secret
+      ├─ HKDF-Expand(master, "pqsc/v2 s2c traffic")     → s2c_traffic_secret (parallel)
+      ├─ HKDF-Expand(master, "pqsc/v2 client finished") → client Finished MAC key
+      ├─ HKDF-Expand(master, "pqsc/v2 server finished") → reserved
+      └─ HKDF-Expand(master, "pqsc/v2 resumption")      → exportable resumption secret
 ```
 
-Every label is versioned (`pqsc/v1 …`) so a future protocol version can introduce new derivations
+Every label is versioned (`pqsc/v2 …`) so a future protocol version can introduce new derivations
 without colliding with old ones.
 
 ## Trust model in one paragraph

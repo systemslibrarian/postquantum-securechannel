@@ -6,9 +6,79 @@ preview releases.
 
 ## [0.3.0-preview.1]
 
-An **ecosystem-foundation release**. No core wire-format changes — 0.3.0 talks to 0.2.x peers.
+> **Post-publication remediation note.** This release window also incorporates an external-review
+> wire-format change (protocol version `1` → `2`). Peers built from the pre-remediation snapshot of
+> `0.3.0-preview.1` are NOT interoperable with peers built from the post-remediation snapshot —
+> handshakes fail cleanly at version negotiation. The package version stays at `0.3.0-preview.1`
+> because preview tags absorb wire changes; see "Wire-format & protocol-version bump to 2" below
+> and `KNOWN-GAPS.md` §13 for adopter guidance.
+
+An **ecosystem-foundation release**. The original 0.3.0 line was an ecosystem release with no core
+wire-format changes (0.3.0 talked to 0.2.x peers). The post-remediation snapshot is wire-incompatible
+with both 0.2.x and the pre-remediation 0.3.0-preview.1 snapshot.
 What's new is shape: companion packages, samples that look like real production, and the
 documentation real engineers ask for before adopting a crypto library.
+
+### Wire-format & protocol-version bump to 2 (post-publication remediation)
+
+`PqProtocol.Version` is now `2`. Two findings from an external adversarial review of the protocol
+glue land here:
+
+- **HKDF info construction is now RFC 5869 / TLS 1.3-HkdfLabel compliant.** The previous wrapper
+  concatenated `ASCII label ‖ context` with no length framing, working only because every call site
+  used fixed labels and `context` was empty everywhere except the master expansion. The new
+  construction is `uint16_BE(length) ‖ uint8(label_len) ‖ label ‖ uint8(context_len) ‖ context`,
+  making `(length, label, context)` triples unambiguous by design and structurally precluding any
+  future label addition from silently colliding. Source: external review, Finding 2.
+- **Transcript hashing now length-prefixes each fragment.** `Transcript.Hash(a, b, …)` feeds
+  `uint32_BE(len(a)) ‖ a ‖ uint32_BE(len(b)) ‖ b ‖ …` into SHA-256. Today's call sites pass two
+  self-framed messages and were unambiguous in practice, but the helper signature accepts any
+  fragment list — length framing makes future ambiguity impossible. Source: external review,
+  Finding 3.
+- **Domain-separation labels rebased** from `pqsc/v1 …` to `pqsc/v2 …` to make the wire change loud
+  and visible. `PqProtocol.SupportedVersions = [2]` — no backwards-negotiation to v1, by design.
+
+**What did NOT change:** the X-Wing combiner, ML-DSA-65 signature flow, AES-256-GCM record framing,
+anti-replay bitmap shape, NIST SP 800-38D caps, and the three-message handshake state machine. This
+is a key-schedule and transcript-framing change, not a protocol-redesign.
+
+**Adopter action:** if you have any peer built from the pre-remediation snapshot of
+`0.3.0-preview.1`, both ends must update to this build before they can talk again. There is no
+negotiation between v1 and v2.
+
+### Hardening (not wire-affecting)
+
+- `AntiReplayWindow.Commit` actively enforces the precondition documented since 0.2.1: committing a
+  sequence that `IsAcceptable` did not approve throws `InvalidOperationException`. Defense against a
+  future caller forgetting the gate; no behavior change for correctly-gated callers. Source:
+  external review, Finding 1e.
+
+### New tests
+
+- `KeyScheduleKatTests` — pinned KAT for the full schedule (master → traffic secrets, Finished keys,
+  resumption secret) against an independently-rebuilt reference implementation.
+- `HkdfInfoFormatTests` — byte-locks the new `Hkdf.BuildInfo` output for every call site so future
+  label additions cannot silently collide.
+- `TranscriptFramingTests` — pins the per-fragment length-prefix and the boundary-distinguishing
+  property.
+- `AntiReplayWrapTests` — regression-locks Step-0's analysis that sequence wrap rejects correctly.
+- `RecordNonceKatTests` — round-trips at and across an explicit `Ratchet()` boundary; asserts the
+  nonce-prefix actually changes and that the sequence counter resets to 0.
+
+### Honesty / maturity framing (no behavior change)
+
+- README gains a prominent top-of-file status banner: preview, NOT independently audited, evaluation
+  / internal-use only today. The existing security-properties table is unchanged but now prefaced
+  with "these are design intentions validated by the project's own tests, not audited guarantees."
+- `docs/AUDIT-SCOPE.md` (new) — per-surface scope and test-coverage map for an external reviewer.
+- `KNOWN-GAPS.md` §1 expanded with explicit protocol-composition risk language; §2 expanded with
+  concrete IETF-draft wire-format consequences; new §13 covering the v1↔v2 non-interop window.
+- `docs/threat-model.md` — caveat above Goals and a key above the adversary-capability table
+  clarifying that ✅ means "designed-and-tested-against", not "independently verified".
+
+### Original 0.3.0 content (pre-remediation)
+
+A no-core-wire-change ecosystem release adding:
 
 ### New packages
 - **`PostQuantum.SecureChannel.AspNetCore`** — DI registration

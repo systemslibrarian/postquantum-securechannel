@@ -8,6 +8,28 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
+> ## Status: preview — NOT independently audited
+>
+> **PostQuantum.SecureChannel is a hand-rolled secure-channel protocol that composes vetted
+> primitives (X-Wing, ML-DSA-65, AES-256-GCM, HKDF-SHA256) into a three-message handshake and an
+> AES-GCM record layer.** The primitives are validated against published IETF/NIST test vectors.
+> **The composition has not been reviewed by an external cryptographer.** Protocol-composition
+> bugs — wrong transcript binding, label collision, nonce-construction error, replay-window
+> off-by-one — do not show up in primitive known-answer tests.
+>
+> **Recommended use today:** evaluation, research, prototyping, and internal deployments where
+> **the operator controls both endpoints** (your own service ↔ your own service, your own worker
+> ↔ your own control plane). The polished docs and "secure by default" framing describe design
+> *intent*, not an audited guarantee.
+>
+> **Not recommended today:** protecting third-party user data, regulated workloads, or any traffic
+> where you cannot personally accept the risk of an unreviewed protocol. For those cases use TLS
+> 1.3 with a hybrid PQ KEM as it becomes available, or wait for this library's first external
+> review (see [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md)).
+>
+> Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md), [`docs/threat-model.md`](docs/threat-model.md), and
+> [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md) before adopting.
+
 PostQuantum.SecureChannel establishes a mutually-verifiable, authenticated session between two .NET
 endpoints that stays secure against both today's adversaries and tomorrow's quantum computers — with
 an API small enough to fit in your head.
@@ -68,6 +90,11 @@ Then explore the more realistic samples:
 ---
 
 ## Security posture at a glance
+
+The properties below are the protocol's **design intentions**, each validated by tests in this
+repository's own suite. They are not audited guarantees and an external review may identify
+gaps the project's own tests do not exercise. See [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md)
+for the per-property test-coverage map.
 
 | Property | How it's achieved |
 | --- | --- |

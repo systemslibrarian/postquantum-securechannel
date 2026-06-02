@@ -45,7 +45,7 @@ public class FuzzTests
         using var keyPair = Cryptography.XWing.GenerateKeyPair();
         var valid = new ClientHello
         {
-            SupportedVersions = [1],
+            SupportedVersions = [2],
             ClientRandom = new byte[PqProtocol.RandomSize],
             KemPublicKey = keyPair.PublicKey,
         }.Serialize();

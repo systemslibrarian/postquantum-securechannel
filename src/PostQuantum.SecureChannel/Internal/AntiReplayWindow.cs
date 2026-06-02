@@ -48,8 +48,20 @@ internal sealed class AntiReplayWindow
     }
 
     /// <summary>Records <paramref name="sequence"/> as consumed, advancing and zeroing the window as needed.</summary>
+    /// <remarks>
+    /// Callers must gate every <see cref="Commit"/> on a successful <see cref="IsAcceptable"/> check.
+    /// The guard below enforces that precondition in code (not just by comment) so that a future
+    /// caller that forgets the gate cannot silently mis-record a replayed or out-of-window sequence.
+    /// </remarks>
     internal void Commit(ulong sequence)
     {
+        if (!IsAcceptable(sequence))
+        {
+            throw new InvalidOperationException(
+                "AntiReplayWindow.Commit was called for a sequence that IsAcceptable did not approve. "
+                + "Callers must gate every Commit on a successful IsAcceptable check.");
+        }
+
         if (!_any)
         {
             _highest = sequence;
@@ -68,7 +80,6 @@ internal sealed class AntiReplayWindow
         else
         {
             ulong distance = _highest - sequence;
-            // IsAcceptable already vetted distance < windowSize.
             SetBit(distance);
         }
     }

@@ -100,4 +100,24 @@ public class AntiReplayBitmapTests
         Assert.False(window.IsAcceptable(0));   // distance 64 >= window 64
         Assert.True(window.IsAcceptable(1));    // distance 63 < window 64
     }
+
+    /// <summary>
+    /// Finding 1e (external review): Commit must refuse to record a sequence that IsAcceptable would
+    /// have rejected, so a future caller forgetting the gate cannot silently mis-record a replay or
+    /// out-of-window sequence.
+    /// </summary>
+    [Fact]
+    public void Commit_WithoutIsAcceptableApproval_Throws()
+    {
+        var window = new AntiReplayWindow(64);
+        window.Commit(100);
+
+        // Replaying the highest sequence: IsAcceptable returns false, so Commit must refuse.
+        Assert.False(window.IsAcceptable(100));
+        Assert.Throws<InvalidOperationException>(() => window.Commit(100));
+
+        // A sequence well outside the window: same enforcement.
+        Assert.False(window.IsAcceptable(0));
+        Assert.Throws<InvalidOperationException>(() => window.Commit(0));
+    }
 }

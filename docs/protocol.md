@@ -1,12 +1,14 @@
-# PostQuantum.SecureChannel — Protocol Specification (v1)
+# PostQuantum.SecureChannel — Protocol Specification (v2)
 
 This document describes the wire protocol and key schedule for PostQuantum.SecureChannel protocol
-version `1` (library `0.2.1-preview.1`). It is intended to be precise enough to audit and to
+version `2` (library `0.3.0-preview.1`). It is intended to be precise enough to audit and to
 reimplement.
 
-> **Pre-1.0:** this format may change between preview releases. The wire format changed between 0.1.x
-> and 0.2.x. The message-format byte and the negotiated protocol version guard against silently mixing
-> incompatible peers.
+> **Pre-1.0:** this format may change between preview releases. **Protocol version 2 landed inside
+> the `0.3.0-preview.1` window as remediation for an external review of the HKDF info construction
+> (Finding 2) and transcript framing (Finding 3).** It is not wire-compatible with version 1; a v1
+> peer and a v2 peer fail cleanly at version negotiation. The message-format byte and the negotiated
+> protocol version guard against silently mixing incompatible peers.
 
 ## 1. Primitives
 
@@ -26,10 +28,16 @@ The X-Wing combiner is validated byte-for-byte against the three Known-Answer Te
 the draft. When that draft is published as an RFC, the pinned reference here will be updated to the RFC
 number and the vectors re-checked.
 
+**Why SHA-256 (not SHA3-256) for the transcript and HKDF.** The protocol-glue layer is uniformly
+SHA-256 (HKDF-SHA256, HMAC-SHA256, transcript SHA-256). SHA-256 is FIPS-approved, hardware-accelerated
+on every modern CPU, and gives 128-bit collision resistance under standard assumptions — sufficient
+for transcript binding and for HKDF. SHA3-256 is used inside the X-Wing combiner only, because
+`draft-connolly-cfrg-xwing-kem` mandates it; the choice is independent.
+
 ## 2. Wire encoding
 
 All integers are big-endian. A **block** is a 16-bit length prefix followed by that many bytes. Every
-handshake message begins with a 1-byte **message-format** byte (currently `0x01`).
+handshake message begins with a 1-byte **message-format** byte (currently `0x02`).
 
 When carried over a byte stream by `PqSecureChannelStream`, each handshake message and each record is
 additionally wrapped in a 4-byte big-endian length prefix (see `Transport/PqFraming.cs`).
@@ -37,16 +45,16 @@ additionally wrapped in a 4-byte big-endian length prefix (see `Transport/PqFram
 ### 2.1 ClientHello
 
 ```
-format:           u8  (0x01)
+format:            u8  (0x02)
 supportedVersions: block (1..64 bytes, one byte per offered protocol version, highest preference first)
-clientRandom:     block (32 bytes)
-kemPublicKey:     block (1216 bytes, X-Wing public key)
+clientRandom:      block (32 bytes)
+kemPublicKey:      block (1216 bytes, X-Wing public key)
 ```
 
 ### 2.2 ServerHello
 
 ```
-format:               u8  (0x01)
+format:               u8  (0x02)
 negotiatedVersion:    u8  (the single protocol version the server selected)
 serverRandom:         block (32 bytes)
 kemCiphertext:        block (1120 bytes, X-Wing ciphertext)
@@ -59,7 +67,7 @@ The **signed body** is the message above *excluding* the `signature` block.
 ### 2.3 ClientFinished
 
 ```
-format:               u8  (0x01)
+format:               u8  (0x02)
 clientIdentityPublic: block (1952 bytes if mutual auth, else empty)
 clientSignature:      block (ML-DSA-65 signature if mutual auth, else empty)
 finishedMac:          block (32 bytes, HMAC-SHA256)
@@ -70,13 +78,19 @@ finishedMac:          block (32 bytes, HMAC-SHA256)
 The client lists every protocol version it supports in `supportedVersions`. The server selects the
 highest version that appears in both its own and the client's lists and echoes it in
 `negotiatedVersion`; if there is no overlap it aborts. The client verifies the negotiated version is
-one it offered and still supports. (Only version `1` exists today.)
+one it offered and still supports. (Only version `2` exists today; version `1` is not negotiable from
+this build — by design, since the v1 schedule is the artifact this remediation removed.)
 
 ## 4. Transcript hashes
 
+**Each fragment is preceded by its 4-byte big-endian length when fed to SHA-256.** This guarantees
+that no two distinct fragment sequences can collide on the same hash by concatenation ambiguity:
+
 ```
-h1 = SHA-256( ClientHello ‖ ServerHello-body )          // signed by the server, binds the key schedule
-h2 = SHA-256( ClientHello ‖ ServerHello-full )           // covers the server signature; used for Finished
+TranscriptHash(f₁, …, fₙ) = SHA-256( len(f₁) ‖ f₁ ‖ … ‖ len(fₙ) ‖ fₙ )
+
+h1 = TranscriptHash( ClientHello, ServerHello-body )   // signed by the server, binds the key schedule
+h2 = TranscriptHash( ClientHello, ServerHello-full )   // covers the server signature; used for Finished
 ```
 
 `ServerHello-full` includes the server's `signature` block; `ServerHello-body` does not.
@@ -84,8 +98,8 @@ h2 = SHA-256( ClientHello ‖ ServerHello-full )           // covers the server 
 ## 5. Authentication
 
 ```
-serverSignature = ML-DSA-65.Sign( serverIdentitySk, "pqsc/v1 server-auth" ‖ h1 )
-clientSignature = ML-DSA-65.Sign( clientIdentitySk, "pqsc/v1 client-auth" ‖ h2 )   // mutual auth only
+serverSignature = ML-DSA-65.Sign( serverIdentitySk, "pqsc/v2 server-auth" ‖ h1 )
+clientSignature = ML-DSA-65.Sign( clientIdentitySk, "pqsc/v2 client-auth" ‖ h2 )   // mutual auth only
 ```
 
 The client verifies `serverSignature` against the **pinned** server identity before proceeding. If the
@@ -93,26 +107,37 @@ The client verifies `serverSignature` against the **pinned** server identity bef
 
 ## 6. Key schedule (HKDF-SHA256)
 
+Every HKDF `Expand` call uses a TLS 1.3-style `HkdfLabel` structure for the `info` parameter, so no
+two `(length, label, context)` triples can collide on the same `info` bytes:
+
+```
+HkdfLabel = uint16_BE(length) ‖ uint8(label_len) ‖ label ‖ uint8(context_len) ‖ context
+
+Expand(prk, label, length, context = empty) = HKDF-Expand(prk, HkdfLabel, length)
+```
+
+The schedule itself:
+
 ```
 ss   = X-Wing shared secret (32 bytes)
 psk  = resumption secret (32 bytes) if resuming, else empty
 salt = clientRandom ‖ serverRandom ‖ psk
 PRK  = HKDF-Extract(salt, ss)
 
-master = HKDF-Expand(PRK, "pqsc/v1 master" ‖ h1, 32)
+master = Expand(PRK, "pqsc/v2 master", 32, context = h1)
 
-c2sTrafficSecret = HKDF-Expand(master, "pqsc/v1 c2s traffic", 32)
-s2cTrafficSecret = HKDF-Expand(master, "pqsc/v1 s2c traffic", 32)
-clientFinKey     = HKDF-Expand(master, "pqsc/v1 client finished", 32)
-serverFinKey     = HKDF-Expand(master, "pqsc/v1 server finished", 32)   // reserved
-resumptionSecret = HKDF-Expand(master, "pqsc/v1 resumption", 32)         // exportable
+c2sTrafficSecret = Expand(master, "pqsc/v2 c2s traffic", 32)
+s2cTrafficSecret = Expand(master, "pqsc/v2 s2c traffic", 32)
+clientFinKey     = Expand(master, "pqsc/v2 client finished", 32)
+serverFinKey     = Expand(master, "pqsc/v2 server finished", 32)   // reserved
+resumptionSecret = Expand(master, "pqsc/v2 resumption", 32)         // exportable
 ```
 
 Each direction's AEAD keys come from its traffic secret:
 
 ```
-key = HKDF-Expand(trafficSecret, "pqsc/v1 key", 32)
-iv  = HKDF-Expand(trafficSecret, "pqsc/v1 iv", 4)
+key = Expand(trafficSecret, "pqsc/v2 key", 32)
+iv  = Expand(trafficSecret, "pqsc/v2 iv", 4)
 ```
 
 The master secret is bound to `h1`, so it depends on the full handshake transcript, both nonces, and
@@ -133,17 +158,18 @@ allowlist.
 Each record:
 
 ```
-format:     u8 (0x01)
+format:      u8 (0x02)
 contentType: u8 (0x17 = application data, 0x18 = key update)
-sequence:   u64 (big-endian, per-direction, per-epoch, starts at 0)
-ciphertext: AES-256-GCM ciphertext (same length as plaintext)
-tag:        16 bytes
+sequence:    u64 (big-endian, per-direction, per-epoch, starts at 0)
+ciphertext:  AES-256-GCM ciphertext (same length as plaintext)
+tag:         16 bytes
 ```
 
 - **Nonce** = `ivPrefix(4) ‖ sequence(8)` for the current epoch of that direction (12 bytes).
 - **AEAD associated data** = `format ‖ contentType ‖ sequence ‖ callerAad`.
 - **Replay/order**: strict mode requires `sequence == expectedNext`; sliding-window mode accepts any
-  in-window, not-yet-seen sequence and rejects replays and records older than the window.
+  in-window, not-yet-seen sequence and rejects replays and records older than the window. `Commit`
+  enforces the `IsAcceptable` precondition in code.
 - **Per-epoch hard caps** matching NIST SP 800-38D: sending more than `2^32` records, or encrypting
   more than `2^36` plaintext bytes, in one epoch is refused with `PqEpochExhaustedException`
   (perform a key update first). `PqSession.NeedsKeyUpdate` trips inside a 1/256th safety margin of
@@ -160,12 +186,28 @@ current epoch keys at the current sequence number. After sending it, the sender 
 direction:
 
 ```
-trafficSecret' = HKDF-Expand(trafficSecret, "pqsc/v1 key update", 32)
+trafficSecret' = Expand(trafficSecret, "pqsc/v2 key update", 32)
 ```
 
 then re-derives `key`/`iv` from `trafficSecret'`, resets its sequence number to 0, and increments its
 epoch. On receipt (after successful authentication), the peer ratchets its receive direction the same
 way. Each direction updates independently.
+
+## 10. Why v2: external review remediation
+
+Protocol version `2` is the wire-format result of two findings from an external adversarial review of
+the protocol glue:
+
+- **Finding 2 — HKDF info construction.** v1's `info` was raw `ASCII label ‖ context` with no length
+  framing. It was unambiguous in practice because every call site used fixed labels, but the helper
+  permitted future `(label, context)` collisions. v2 uses the TLS 1.3 `HkdfLabel` structure above.
+- **Finding 3 — Transcript framing.** v1's transcript fed each fragment directly into SHA-256, also
+  unambiguous in practice because the two call sites pass self-framed messages, but fragile against
+  future variable-length additions. v2 length-prefixes each fragment.
+
+Both changes alter every derived key byte and the transcript hash, so v1 and v2 are not wire-
+compatible. See `KNOWN-GAPS.md` §13 and `CHANGELOG.md` for adopter guidance, and
+`docs/AUDIT-SCOPE.md` for what remains in the post-v2 audit scope.
 
 ---
 
