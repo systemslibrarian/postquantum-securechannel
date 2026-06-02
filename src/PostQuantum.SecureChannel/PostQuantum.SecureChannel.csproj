@@ -15,8 +15,9 @@
   <!-- ============================ NuGet packaging metadata ============================ -->
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel</PackageId>
-    <Version>0.3.0-preview.1</Version>
-    <PackageReleaseNotes>0.3.0-preview.1: Ecosystem-foundation release (wire-compatible with 0.2.x). Adds OpenTelemetry-friendly distributed tracing via System.Diagnostics.ActivitySource alongside the existing Meter/EventSource. Releases two companion packages: PostQuantum.SecureChannel.AspNetCore (DI registration, IConfiguration binding, WebSocket-to-Stream adapter, MapPqWebSocket endpoint helper) and PostQuantum.SecureChannel.Testing (in-memory duplex transport, one-call handshake harness). Adds production-shaped samples (MicroserviceWebSocket, WorkerControlPlane, QueueEnvelope) and architecture/threat-model/decision/operations/troubleshooting docs. Includes 0.2.1-preview.1 hardening: DoS-safe bitmap replay window, NIST SP 800-38D record + byte caps with PqEpochExhaustedException, IDisposable handshakes, AllowedServerIdentities for staged rotation, and named PqSessionOptions presets.</PackageReleaseNotes>
+    <Version>0.3.0-preview.2</Version>
+    <FileVersion>0.3.0.2</FileVersion>
+    <PackageReleaseNotes>0.3.0-preview.2: External-review remediation of the protocol glue. Bumps PqProtocol.Version 1 -> 2 (WIRE-FORMAT BREAK; v1 and v2 peers fail cleanly at version negotiation). HKDF info construction is now RFC 5869 / TLS 1.3 HkdfLabel with explicit length framing (Finding 2). Transcript hashing length-prefixes each fragment (Finding 3). Domain-separation labels rebased pqsc/v1 -> pqsc/v2. AntiReplayWindow.Commit enforces the IsAcceptable precondition in code (Finding 1e). Adds five pinned-KAT test files (key schedule, HKDF info bytes, transcript framing, replay-window wrap, record nonce / epoch boundary); 450/450 tests pass on net8.0 / net9.0 / net10.0. README gains a prominent preview-and-unaudited status banner; docs/AUDIT-SCOPE.md added. No changes to the X-Wing combiner, ML-DSA-65 signature flow, AES-256-GCM record framing, anti-replay bitmap shape, or the three-message handshake state machine. Adopters running 0.3.0-preview.1 must update both ends to talk again.</PackageReleaseNotes>
     <Authors>Paul Clark</Authors>
     <Company>Paul Clark</Company>
     <Product>PostQuantum.SecureChannel</Product>

@@ -4,34 +4,26 @@ All notable changes to PostQuantum.SecureChannel are documented here. This proje
 [Semantic Versioning](https://semver.org/). While pre-1.0, the wire format and API may change between
 preview releases.
 
-## [0.3.0-preview.1]
+## [0.3.0-preview.2]
 
-> **Post-publication remediation note.** This release window also incorporates an external-review
-> wire-format change (protocol version `1` → `2`). Peers built from the pre-remediation snapshot of
-> `0.3.0-preview.1` are NOT interoperable with peers built from the post-remediation snapshot —
-> handshakes fail cleanly at version negotiation. The package version stays at `0.3.0-preview.1`
-> because preview tags absorb wire changes; see "Wire-format & protocol-version bump to 2" below
-> and `KNOWN-GAPS.md` §13 for adopter guidance.
+**External-review remediation of the protocol glue.** This release bumps `PqProtocol.Version` from
+`1` to `2`. It is a **wire-format break with `0.3.0-preview.1`** — v1 and v2 peers fail cleanly at
+version negotiation (`PqProtocolException("No mutually supported protocol version...")`); they do
+not silently mis-decrypt. Adopters running `0.3.0-preview.1` must update both ends to talk again.
+See `KNOWN-GAPS.md` §13 and `docs/protocol.md` §10 for the full statement.
 
-An **ecosystem-foundation release**. The original 0.3.0 line was an ecosystem release with no core
-wire-format changes (0.3.0 talked to 0.2.x peers). The post-remediation snapshot is wire-incompatible
-with both 0.2.x and the pre-remediation 0.3.0-preview.1 snapshot.
-What's new is shape: companion packages, samples that look like real production, and the
-documentation real engineers ask for before adopting a crypto library.
+### Wire-format & protocol-version bump to 2
 
-### Wire-format & protocol-version bump to 2 (post-publication remediation)
+Two findings from an external adversarial review of the protocol glue land here:
 
-`PqProtocol.Version` is now `2`. Two findings from an external adversarial review of the protocol
-glue land here:
-
-- **HKDF info construction is now RFC 5869 / TLS 1.3-HkdfLabel compliant.** The previous wrapper
-  concatenated `ASCII label ‖ context` with no length framing, working only because every call site
-  used fixed labels and `context` was empty everywhere except the master expansion. The new
-  construction is `uint16_BE(length) ‖ uint8(label_len) ‖ label ‖ uint8(context_len) ‖ context`,
-  making `(length, label, context)` triples unambiguous by design and structurally precluding any
-  future label addition from silently colliding. Source: external review, Finding 2.
+- **HKDF info construction is now RFC 5869 / TLS 1.3-HkdfLabel compliant.** v1's wrapper concatenated
+  `ASCII label ‖ context` with no length framing, working only because every call site used fixed
+  labels and `context` was empty everywhere except the master expansion. The new construction is
+  `uint16_BE(length) ‖ uint8(label_len) ‖ label ‖ uint8(context_len) ‖ context`, making
+  `(length, label, context)` triples unambiguous by design and structurally precluding any future
+  label addition from silently colliding. Source: external review, Finding 2.
 - **Transcript hashing now length-prefixes each fragment.** `Transcript.Hash(a, b, …)` feeds
-  `uint32_BE(len(a)) ‖ a ‖ uint32_BE(len(b)) ‖ b ‖ …` into SHA-256. Today's call sites pass two
+  `uint32_BE(len(a)) ‖ a ‖ uint32_BE(len(b)) ‖ b ‖ …` into SHA-256. v1's call sites passed two
   self-framed messages and were unambiguous in practice, but the helper signature accepts any
   fragment list — length framing makes future ambiguity impossible. Source: external review,
   Finding 3.
@@ -41,10 +33,6 @@ glue land here:
 **What did NOT change:** the X-Wing combiner, ML-DSA-65 signature flow, AES-256-GCM record framing,
 anti-replay bitmap shape, NIST SP 800-38D caps, and the three-message handshake state machine. This
 is a key-schedule and transcript-framing change, not a protocol-redesign.
-
-**Adopter action:** if you have any peer built from the pre-remediation snapshot of
-`0.3.0-preview.1`, both ends must update to this build before they can talk again. There is no
-negotiation between v1 and v2.
 
 ### Hardening (not wire-affecting)
 
@@ -61,24 +49,36 @@ negotiation between v1 and v2.
   label additions cannot silently collide.
 - `TranscriptFramingTests` — pins the per-fragment length-prefix and the boundary-distinguishing
   property.
-- `AntiReplayWrapTests` — regression-locks Step-0's analysis that sequence wrap rejects correctly.
+- `AntiReplayWrapTests` — regression-locks the analysis that sequence wrap rejects correctly.
 - `RecordNonceKatTests` — round-trips at and across an explicit `Ratchet()` boundary; asserts the
   nonce-prefix actually changes and that the sequence counter resets to 0.
+
+Suite is now 134 tests in the core project (450 total across the three projects × three TFMs).
 
 ### Honesty / maturity framing (no behavior change)
 
 - README gains a prominent top-of-file status banner: preview, NOT independently audited, evaluation
-  / internal-use only today. The existing security-properties table is unchanged but now prefaced
+  / internal-use only today. The existing security-properties table is unchanged but is now prefaced
   with "these are design intentions validated by the project's own tests, not audited guarantees."
 - `docs/AUDIT-SCOPE.md` (new) — per-surface scope and test-coverage map for an external reviewer.
 - `KNOWN-GAPS.md` §1 expanded with explicit protocol-composition risk language; §2 expanded with
-  concrete IETF-draft wire-format consequences; new §13 covering the v1↔v2 non-interop window.
+  concrete IETF-draft wire-format consequences; new §13 covering the v1↔v2 non-interop.
 - `docs/threat-model.md` — caveat above Goals and a key above the adversary-capability table
   clarifying that ✅ means "designed-and-tested-against", not "independently verified".
 
-### Original 0.3.0 content (pre-remediation)
+### Companion packages
 
-A no-core-wire-change ecosystem release adding:
+`PostQuantum.SecureChannel.AspNetCore` and `PostQuantum.SecureChannel.Testing` ship in lockstep at
+`0.3.0-preview.2`. They `<ProjectReference>` the core, so they inherit the wire-format break — a
+0.3.0-preview.2 AspNetCore endpoint requires 0.3.0-preview.2 clients and vice versa.
+
+## [0.3.0-preview.1]
+
+An **ecosystem-foundation release**. No core wire-format changes — 0.3.0-preview.1 talks to 0.2.x
+peers. What's new is shape: companion packages, samples that look like real production, and the
+documentation real engineers ask for before adopting a crypto library. *(Superseded for new
+adoption by `0.3.0-preview.2`, which is a wire-format break for the protocol-glue remediation
+above.)*
 
 ### New packages
 - **`PostQuantum.SecureChannel.AspNetCore`** — DI registration

@@ -13,8 +13,9 @@
 
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel.AspNetCore</PackageId>
-    <Version>0.3.0-preview.1</Version>
-    <PackageReleaseNotes>0.3.0-preview.1: Initial release of ASP.NET Core integration for PostQuantum.SecureChannel. Adds AddPostQuantumSecureChannel() DI registration with IConfiguration binding for pinned identities, a WebSocket adapter that wraps any HTTP WebSocket as a PqSecureChannelStream, and MapPqEndpoint() / MapPqWebSocket() endpoint helpers for minimal APIs.</PackageReleaseNotes>
+    <Version>0.3.0-preview.2</Version>
+    <FileVersion>0.3.0.2</FileVersion>
+    <PackageReleaseNotes>0.3.0-preview.2: Lockstep release with PostQuantum.SecureChannel 0.3.0-preview.2 (external-review remediation of the protocol glue: protocol-version bump 1 -> 2; HKDF + transcript-framing wire-format break). This package has no behavior changes of its own; it ProjectReferences PostQuantum.SecureChannel and therefore inherits the wire-format change. AspNetCore endpoints established with a 0.3.0-preview.2 server require 0.3.0-preview.2 clients (and vice versa); v1 peers fail cleanly at version negotiation.</PackageReleaseNotes>
     <Authors>Paul Clark</Authors>
     <Description>ASP.NET Core integration for PostQuantum.SecureChannel. Adds AddPostQuantumSecureChannel() DI registration with IConfiguration binding (server identity seed, pinned client keys, session preset), a PqWebSocketStream adapter that wraps any WebSocket as an encrypted Stream, a MapPqWebSocket() endpoint helper for minimal APIs, and a ws.AcceptPqClientAsync() client-side extension. Host a post-quantum secure WebSocket endpoint in roughly five lines of Program.cs.</Description>
     <Summary>ASP.NET Core integration (DI, IConfiguration, WebSocket adapter, endpoint helpers) for PostQuantum.SecureChannel.</Summary>
