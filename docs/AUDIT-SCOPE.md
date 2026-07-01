@@ -4,10 +4,14 @@ A focused scope document for an external cryptographer or audit firm reviewing
 PostQuantum.SecureChannel. The goal is to make the highest-risk surfaces obvious
 and to be honest about what the project's own test suite does and does not cover.
 
-> **Status:** preview, 0.3.0-preview.1. Primitives are vetted (BouncyCastle for
-> ML-KEM, ML-DSA, X25519, SHA-3/SHAKE; .NET BCL for AES-256-GCM, HKDF, SHA-256,
-> HMAC). The composition implemented in this repository has **not** been
-> independently reviewed.
+> **Status:** 1.0.0 — API/wire-format stable, **not independently audited**. An
+> external review is not feasible at this time, so this scope document stands as
+> the brief for one if it becomes possible. Primitives are vetted (BouncyCastle
+> for ML-KEM, ML-DSA, X25519, SHA-3/SHAKE; .NET BCL for AES-256-GCM, HKDF,
+> SHA-256, HMAC). The composition implemented in this repository has **not** been
+> independently reviewed; it is covered by this repo's own test suite, including
+> the property-based no-nonce-reuse sweep (§5) and transcript-equivalence tests
+> (§3) added for 1.0.
 
 ## What an external reviewer should examine
 
@@ -64,13 +68,17 @@ at least one case"; it does **not** mean exhaustively verified.
   transcript accumulation inside `PqClientHandshake` / `PqServerHandshake`.
 - **Repo tests covering it:** `HandshakeTests.cs` (tamper / wrong-identity
   rejection), `TranscriptFramingTests.cs` (per-fragment length framing
-  prevents ambiguous re-splits), `FuzzTests.cs` (random-byte mutations),
+  prevents ambiguous re-splits), `TranscriptEquivalenceTests.cs` (order
+  sensitivity, exhaustive three-way repartition of fixed flat bytes,
+  pre-framed nesting confusion, forged length-prefix, positional significance
+  of empty fragments — asserts `Transcript.Hash` is an injective encoding of
+  the ordered fragment *list*), `FuzzTests.cs` (random-byte mutations),
   `MultiPinTests.cs` (wrong pinned identity is rejected).
-- **What the repo does *not* assert:** a higher-order transcript-equivalence
-  attack — two *valid* but differently-structured transcripts that hash the
-  same — is not exercised. A reviewer should confirm that every byte that
-  influences key derivation is included in the transcript, exactly once, in
-  a canonical order.
+- **What the repo does *not* assert:** the higher-order transcript-equivalence
+  cases above operate at the `Transcript.Hash` level; a reviewer should still
+  confirm end-to-end that every byte which influences key derivation is fed
+  into the transcript, exactly once, in a canonical order at each handshake
+  call site (not just that the hash primitive is unambiguous).
 
 ### 4. Anti-replay window
 
@@ -106,13 +114,16 @@ at least one case"; it does **not** mean exhaustively verified.
   `AutoRekeyTests.cs` (prefix freshness after rekey),
   `RecordNonceKatTests.cs` (round-trip across an explicit `Ratchet()` boundary;
   asserts the nonce-prefix actually changes between epochs and that sequence
-  counter resets to 0).
-- **What the repo does *not* assert:** there is no test that programmatically
-  enumerates a *very large* window of sequence numbers across a key update
-  and asserts no reused 96-bit nonce ever appears. This is the single most
-  catastrophic failure mode for AES-GCM, and even with the byte-locking and
-  ratchet-boundary tests in place a reviewer may want a property-based
-  no-nonce-reuse sweep.
+  counter resets to 0), and `NonceUniquenessTests.cs` (the property-based
+  no-nonce-reuse sweep described next).
+- **Now asserted (1.0):** `NonceUniquenessTests.cs` enumerates the 96-bit nonce
+  (`ivPrefix ‖ sequence`) across a wide window at *both* ends of the
+  `[0, 2^32)` sequence space and across many key-update epochs, and asserts no
+  nonce is ever produced twice; it separately asserts every epoch derives a
+  distinct IV prefix (the load-bearing property, since sequences reset to 0 per
+  epoch). This closes the gap that previously lived here — the single most
+  catastrophic failure mode for AES-GCM. A reviewer may still wish to review the
+  sweep's bounds and the reflection it uses to read the per-epoch prefix.
 
 ### 6. Rekeying (key update)
 

@@ -1,0 +1,150 @@
+MlDsaSignature :: field const int PrivateSeedSize
+MlDsaSignature :: field const int PublicKeySize
+MlDsaSignature :: static ValueTuple<byte[], byte[]> GenerateKeyPair()
+MlDsaSignature :: static bool Verify(ReadOnlySpan<byte> publicKey, ReadOnlySpan<byte> message, ReadOnlySpan<byte> signature)
+MlDsaSignature :: static byte[] DerivePublicKey(ReadOnlySpan<byte> privateSeed)
+MlDsaSignature :: static byte[] Sign(ReadOnlySpan<byte> privateSeed, ReadOnlySpan<byte> message)
+PqAuthenticationException :: .ctor(string message)
+PqAuthenticationException :: .ctor(string message, Exception innerException)
+PqClientHandshake :: PqClientHandshakeResult ProcessServerHello(ReadOnlySpan<byte> serverHello)
+PqClientHandshake :: byte[] CreateClientHello()
+PqClientHandshake :: void Dispose()
+PqClientHandshakeResult :: PqSession Session { get; }
+PqClientHandshakeResult :: byte[] ClientFinished { get; }
+PqClientOptions :: .ctor()
+PqClientOptions :: IReadOnlyCollection<PqIdentityPublicKey> AllowedServerIdentities { get; init; }
+PqClientOptions :: PqIdentity ClientIdentity { get; init; }
+PqClientOptions :: PqIdentityPublicKey ServerIdentity { get; init; }
+PqClientOptions :: PqSessionOptions SessionOptions { get; init; }
+PqClientOptions :: byte[] ResumptionSecret { get; init; }
+PqContentType :: ApplicationData = 0
+PqContentType :: KeyUpdate = 1
+PqDecryptionException :: .ctor(string message)
+PqDecryptionException :: .ctor(string message, Exception innerException)
+PqDiagnostics :: field const string Name
+PqDiagnostics :: field static readonly ActivitySource ActivitySource
+PqDiagnostics :: field static readonly Meter Meter
+PqEpochExhaustedException :: .ctor(string message)
+PqEpochExhaustedException :: .ctor(string message, Exception innerException)
+PqIdentity :: PqIdentityPublicKey PublicKey { get; }
+PqIdentity :: byte[] ExportPrivateSeed()
+PqIdentity :: static PqIdentity Create()
+PqIdentity :: static PqIdentity ImportPrivateSeed(ReadOnlySpan<byte> privateSeed)
+PqIdentity :: void Dispose()
+PqIdentityPublicKey :: bool Equals(PqIdentityPublicKey other)
+PqIdentityPublicKey :: bool Equals(object obj)
+PqIdentityPublicKey :: byte[] Export()
+PqIdentityPublicKey :: int GetHashCode()
+PqIdentityPublicKey :: static PqIdentityPublicKey FromBase64(string base64)
+PqIdentityPublicKey :: static PqIdentityPublicKey Import(ReadOnlySpan<byte> publicKey)
+PqIdentityPublicKey :: static bool op_Equality(PqIdentityPublicKey left, PqIdentityPublicKey right)
+PqIdentityPublicKey :: static bool op_Inequality(PqIdentityPublicKey left, PqIdentityPublicKey right)
+PqIdentityPublicKey :: string Fingerprint()
+PqIdentityPublicKey :: string ShortFingerprint()
+PqIdentityPublicKey :: string ToBase64()
+PqIdentityPublicKey :: string ToString()
+PqIncomingRecord :: PqContentType ContentType { get; }
+PqIncomingRecord :: byte[] Payload { get; }
+PqKeyUpdatePolicy :: .ctor()
+PqKeyUpdatePolicy :: static PqKeyUpdatePolicy Disabled { get; }
+PqKeyUpdatePolicy :: static PqKeyUpdatePolicy Recommended { get; }
+PqKeyUpdatePolicy :: ulong? MaxBytesBeforeUpdate { get; init; }
+PqKeyUpdatePolicy :: ulong? MaxRecordsBeforeUpdate { get; init; }
+PqProtocolException :: .ctor(string message)
+PqProtocolException :: .ctor(string message, Exception innerException)
+PqReplayProtection :: SlidingWindow = 1
+PqReplayProtection :: StrictOrdered = 0
+PqRole :: Client = 0
+PqRole :: Server = 1
+PqSecureChannel :: static PqClientHandshake CreateClient(PqClientOptions options)
+PqSecureChannel :: static PqServerHandshake CreateServer(PqServerOptions options)
+PqSecureChannel :: static Task<PqSecureChannelStream> AcceptAsync(Stream stream, PqServerOptions options, bool leaveInnerOpen = False, int maxFrameSize = 16777216, TimeSpan? handshakeTimeout = null, CancellationToken cancellationToken = null)
+PqSecureChannel :: static Task<PqSecureChannelStream> ConnectAsync(Stream stream, PqClientOptions options, bool leaveInnerOpen = False, int maxFrameSize = 16777216, TimeSpan? handshakeTimeout = null, CancellationToken cancellationToken = null)
+PqSecureChannel :: static string LibraryVersion { get; }
+PqSecureChannelException :: .ctor(string message)
+PqSecureChannelException :: .ctor(string message, Exception innerException)
+PqSecureChannelStream :: PqSession Session { get; }
+PqSecureChannelStream :: Task FlushAsync(CancellationToken cancellationToken)
+PqSecureChannelStream :: ValueTask UpdateSendKeyAsync(CancellationToken cancellationToken = null)
+PqSecureChannelStream :: ValueTask WriteAsync(ReadOnlyMemory<byte> buffer, CancellationToken cancellationToken = null)
+PqSecureChannelStream :: ValueTask<int> ReadAsync(Memory<byte> buffer, CancellationToken cancellationToken = null)
+PqSecureChannelStream :: bool CanRead { get; }
+PqSecureChannelStream :: bool CanSeek { get; }
+PqSecureChannelStream :: bool CanWrite { get; }
+PqSecureChannelStream :: int Read(byte[] buffer, int offset, int count)
+PqSecureChannelStream :: long Length { get; }
+PqSecureChannelStream :: long Position { get; set; }
+PqSecureChannelStream :: long Seek(long offset, SeekOrigin origin)
+PqSecureChannelStream :: void Dispose(bool disposing)
+PqSecureChannelStream :: void Flush()
+PqSecureChannelStream :: void SetLength(long value)
+PqSecureChannelStream :: void Write(byte[] buffer, int offset, int count)
+PqServerHandshake :: PqSession ProcessClientFinished(ReadOnlySpan<byte> clientFinished)
+PqServerHandshake :: byte[] ProcessClientHello(ReadOnlySpan<byte> clientHello)
+PqServerHandshake :: void Dispose()
+PqServerOptions :: .ctor()
+PqServerOptions :: IReadOnlyCollection<PqIdentityPublicKey> AuthorizedClients { get; init; }
+PqServerOptions :: PqIdentity Identity { get; init; }
+PqServerOptions :: PqSessionOptions SessionOptions { get; init; }
+PqServerOptions :: bool RequireClientAuthentication { get; init; }
+PqServerOptions :: byte[] ResumptionSecret { get; init; }
+PqSession :: PqIdentityPublicKey RemoteIdentity { get; }
+PqSession :: PqIncomingRecord Open(ReadOnlySpan<byte> record, ReadOnlySpan<byte> associatedData = null)
+PqSession :: PqRole Role { get; }
+PqSession :: bool NeedsKeyUpdate { get; }
+PqSession :: byte[] Decrypt(ReadOnlySpan<byte> record, ReadOnlySpan<byte> associatedData = null)
+PqSession :: byte[] Encrypt(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData = null)
+PqSession :: byte[] ExportResumptionSecret()
+PqSession :: byte[] UpdateSendKey()
+PqSession :: field const int MaxRecordPlaintextSize
+PqSession :: field const ulong MaxBytesPerEpoch
+PqSession :: field const ulong MaxRecordsPerEpoch
+PqSession :: uint ReceiveEpoch { get; }
+PqSession :: uint SendEpoch { get; }
+PqSession :: ulong RecordsReceived { get; }
+PqSession :: ulong RecordsSent { get; }
+PqSession :: void Dispose()
+PqSessionOptions :: .ctor()
+PqSessionOptions :: PqKeyUpdatePolicy KeyUpdatePolicy { get; init; }
+PqSessionOptions :: PqReplayProtection ReplayProtection { get; init; }
+PqSessionOptions :: int ReplayWindowSize { get; init; }
+PqSessionOptions :: static PqSessionOptions Default { get; }
+PqSessionOptions :: static PqSessionOptions HighThroughput { get; }
+PqSessionOptions :: static PqSessionOptions Recommended { get; }
+PqSessionOptions :: static PqSessionOptions UnorderedTransport { get; }
+XWing :: field const int CiphertextSize
+XWing :: field const int PrivateKeySize
+XWing :: field const int PublicKeySize
+XWing :: field const int SharedSecretSize
+XWing :: static ValueTuple<byte[], byte[]> Encapsulate(ReadOnlySpan<byte> publicKey)
+XWing :: static XWingKeyPair GenerateKeyPair()
+XWing :: static byte[] Decapsulate(ReadOnlySpan<byte> privateKey, ReadOnlySpan<byte> ciphertext)
+XWingKeyPair :: byte[] Decapsulate(ReadOnlySpan<byte> ciphertext)
+XWingKeyPair :: byte[] PublicKey { get; }
+XWingKeyPair :: static XWingKeyPair FromSeed(byte[] seed)
+XWingKeyPair :: void Dispose()
+class MlDsaSignature
+class PqAuthenticationException
+class PqClientHandshake
+class PqClientHandshakeResult
+class PqClientOptions
+class PqDecryptionException
+class PqDiagnostics
+class PqEpochExhaustedException
+class PqIdentity
+class PqIdentityPublicKey
+class PqKeyUpdatePolicy
+class PqProtocolException
+class PqSecureChannel
+class PqSecureChannelException
+class PqSecureChannelStream
+class PqServerHandshake
+class PqServerOptions
+class PqSession
+class PqSessionOptions
+class XWing
+class XWingKeyPair
+enum PqContentType
+enum PqReplayProtection
+enum PqRole
+struct PqIncomingRecord

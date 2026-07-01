@@ -13,9 +13,10 @@
 
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel.Testing</PackageId>
-    <Version>0.3.0-preview.2</Version>
-    <FileVersion>0.3.0.2</FileVersion>
-    <PackageReleaseNotes>0.3.0-preview.2: Lockstep release with PostQuantum.SecureChannel 0.3.0-preview.2 (external-review remediation: protocol-version bump 1 -> 2; wire-format break). No API changes here; the in-memory duplex and PqHandshakeHarness now produce sessions speaking v2. Use this version with the matching 0.3.0-preview.2 core.</PackageReleaseNotes>
+    <Version>1.0.0</Version>
+    <AssemblyVersion>1.0.0.0</AssemblyVersion>
+    <FileVersion>1.0.0.0</FileVersion>
+    <PackageReleaseNotes>1.0.0: Lockstep first stable release with PostQuantum.SecureChannel 1.0.0. Test helpers only (in-memory duplex + PqHandshakeHarness); intended for test projects, not production. Use with the matching 1.0.0 core.</PackageReleaseNotes>
     <Authors>Paul Clark</Authors>
     <Description>Test helpers for PostQuantum.SecureChannel. Provides PqInMemoryDuplex.CreatePair() for a pair of in-memory Streams (no TCP, no sockets, no port allocation) and PqHandshakeHarness.Create() that returns a connected client+server PqSession pair in one call (with opt-in mutual auth, resumption secret, and session presets). Intended for test projects; not for production code paths.</Description>
     <Summary>Test helpers for PostQuantum.SecureChannel: in-memory duplex transport and a one-call handshake harness.</Summary>

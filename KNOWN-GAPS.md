@@ -2,8 +2,9 @@
 
 I would rather you know exactly what this library does and does not do than discover it the hard way.
 This document is a deliberately candid account of the current state of PostQuantum.SecureChannel
-(0.3.0-preview.1). None of these are hidden; they are design boundaries, deferred work, or honest
-caveats.
+(1.0.0). None of these are hidden; they are design boundaries, deferred work, or honest caveats.
+Reaching 1.0 stabilizes the API and wire format — it does **not** by itself resolve the audit and
+draft-dependency caveats below, which remain true and are called out plainly.
 
 If any of these gaps blocks your use case, please open an issue — it helps prioritize.
 
@@ -25,9 +26,14 @@ exactly the surface that primitive known-answer tests cannot exercise**. A compo
 bitmap) would pass every primitive KAT and every round-trip test in this repo while still being a
 real flaw. See [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md) for the per-surface coverage map.
 
-**Treat this as preview-quality software.** Recommended use today is evaluation and internal
-deployments where the operator controls both endpoints. For traffic where you cannot personally
-accept the risk of an unreviewed protocol, use TLS 1.3 with a hybrid PQ KEM instead.
+**1.0 does not change this.** The 1.0 release stabilizes the API and wire format; it is not an audit
+milestone. **We are not able to commission an independent audit at this time** — so this gap stays
+open, stated plainly, rather than being quietly dropped at 1.0. The composition is instead covered by
+this repository's own test suite, including a property-based no-nonce-reuse sweep across the sequence
+space and key-update epochs (`NonceUniquenessTests`) and higher-order transcript-equivalence tests
+(`TranscriptEquivalenceTests`) — see [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md) for the per-surface
+map an external reviewer should follow if one becomes available. If you cannot personally accept the
+risk of an unreviewed protocol, use TLS 1.3 with a hybrid PQ KEM instead.
 
 ## 2. X-Wing is based on an IETF draft
 
@@ -41,19 +47,23 @@ still change before final publication.
   XWingLabel)`) are spec-defined. **If the IETF changes any of those before RFC publication, sessions
   established with this version of the library will not interoperate with sessions established
   against the post-RFC version.** There is no cross-version negotiation for the combiner itself.
-- An adopter who deploys 0.3.x widely today and waits for the RFC may face a coordinated cutover.
-  This is one of the reasons the package is `-preview` and stays `-preview` until the RFC settles.
+- An adopter who deploys 1.x widely and waits for the RFC may face a coordinated cutover.
+  **This is the single deliberate exception to 1.0's wire-stability commitment (§3):** `1.x` is
+  stable within itself, but the combiner is pinned to a draft, not a standard.
 - When the RFC is published the implementation will be re-pinned to it, the vectors re-validated,
-  the protocol version byte (`PqProtocol.Version`) bumped, and the change called out in the
-  changelog with explicit interop guidance. Until then, **treat the wire format as draft-pinned,
-  not standards-pinned.**
+  the protocol version byte (`PqProtocol.Version`) bumped, and the change shipped as a **major
+  version (`2.0`)** with explicit interop/migration guidance — never as a silent `1.x` change.
+  Until then, **treat the wire format as draft-pinned, not standards-pinned.**
 
-## 3. Pre-1.0: the wire format and API are not yet stable
+## 3. Wire format and API are stable as of 1.0
 
-This is a preview. Message formats, the key schedule labels, and public APIs may change between
-preview releases. There is **no cross-version interoperability guarantee** until 1.0. A protocol
-version byte is present on every message so that future changes can be negotiated/rejected cleanly,
-but version negotiation itself is not implemented.
+As of 1.0.0 the public API and wire format (protocol version 2) are **stable under Semantic
+Versioning**: message formats, key-schedule labels, and public APIs will not change incompatibly
+without a major-version bump. A `1.x` peer interoperates with any other `1.x` peer, and with
+`0.3.0-preview.2` (which already speaks protocol version 2). A protocol version byte is present on
+every message so a future major version can be negotiated/rejected cleanly. **The one anticipated
+source of a future wire break is the X-Wing combiner (§2)** — a final-RFC combiner change would ship
+as `2.0` with migration guidance, not as a silent `1.x` change.
 
 ## 4. Replay protection: strict ordering by default
 

@@ -4,28 +4,29 @@
 > messages to a live session, secure by default, no insecure knobs.**
 
 [![CI](https://github.com/systemslibrarian/postquantum-securechannel/actions/workflows/ci.yml/badge.svg)](https://github.com/systemslibrarian/postquantum-securechannel/actions/workflows/ci.yml)
-[![NuGet](https://img.shields.io/nuget/vpre/PostQuantum.SecureChannel.svg)](https://www.nuget.org/packages/PostQuantum.SecureChannel)
+[![NuGet](https://img.shields.io/nuget/v/PostQuantum.SecureChannel.svg)](https://www.nuget.org/packages/PostQuantum.SecureChannel)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![.NET](https://img.shields.io/badge/.NET-8.0%20%7C%209.0%20%7C%2010.0-512BD4)](https://dotnet.microsoft.com/)
 
-> ## Status: preview — NOT independently audited
+> ## Status: 1.0 — stable API & wire format, not independently audited
 >
-> **PostQuantum.SecureChannel is a hand-rolled secure-channel protocol that composes vetted
-> primitives (X-Wing, ML-DSA-65, AES-256-GCM, HKDF-SHA256) into a three-message handshake and an
-> AES-GCM record layer.** The primitives are validated against published IETF/NIST test vectors.
-> **The composition has not been reviewed by an external cryptographer.** Protocol-composition
-> bugs — wrong transcript binding, label collision, nonce-construction error, replay-window
-> off-by-one — do not show up in primitive known-answer tests.
+> **PostQuantum.SecureChannel 1.0 commits to a stable public API and wire format (protocol
+> version 2) under [Semantic Versioning](https://semver.org/):** no breaking API or wire-format
+> change without a major-version bump. The cryptographic primitives (X-Wing, ML-DSA-65,
+> AES-256-GCM, HKDF-SHA256) are validated against published IETF/NIST test vectors.
 >
-> **Recommended use today:** evaluation, research, prototyping, and internal deployments where
-> **the operator controls both endpoints** (your own service ↔ your own service, your own worker
-> ↔ your own control plane). The polished docs and "secure by default" framing describe design
-> *intent*, not an audited guarantee.
+> **It has not been independently audited.** An external cryptographic review of the *protocol
+> composition* — the handshake state machine, key-schedule labels, transcript binding, nonce
+> construction, and replay window — has not been performed, and we are not able to commission one
+> at this time. Those are exactly the surfaces that primitive known-answer tests cannot exercise,
+> so they are covered here by this library's own test suite (including a property-based
+> no-nonce-reuse sweep and transcript-equivalence tests), not by third-party review. Evaluate
+> accordingly, read the code, and report anything that looks wrong.
 >
-> **Not recommended today:** protecting third-party user data, regulated workloads, or any traffic
-> where you cannot personally accept the risk of an unreviewed protocol. For those cases use TLS
-> 1.3 with a hybrid PQ KEM as it becomes available, or wait for this library's first external
-> review (see [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md)).
+> **One stability caveat:** the X-Wing combiner tracks
+> [`draft-connolly-cfrg-xwing-kem`](https://datatracker.ietf.org/doc/draft-connolly-cfrg-xwing-kem/),
+> an IETF draft. If the final RFC changes the combiner, that will be a **major-version (2.0)
+> wire-format break** shipped with explicit migration guidance — see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §2.
 >
 > Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md), [`docs/threat-model.md`](docs/threat-model.md), and
 > [`docs/AUDIT-SCOPE.md`](docs/AUDIT-SCOPE.md) before adopting.
@@ -57,14 +58,15 @@ no way to configure your way into a weak session.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.SecureChannel --version 0.3.0-preview.2
+dotnet add package PostQuantum.SecureChannel --version 1.0.0
 
 # Optional companions:
-dotnet add package PostQuantum.SecureChannel.AspNetCore --version 0.3.0-preview.2   # DI, WebSocket
-dotnet add package PostQuantum.SecureChannel.Testing    --version 0.3.0-preview.2   # tests only
+dotnet add package PostQuantum.SecureChannel.AspNetCore --version 1.0.0   # DI, WebSocket
+dotnet add package PostQuantum.SecureChannel.Testing    --version 1.0.0   # tests only
 ```
 
-Targets `net8.0`, `net9.0`, and `net10.0`. Wire-format-stable across the 0.2.x → 0.3.x line.
+Targets `net8.0`, `net9.0`, and `net10.0`. Wire format is stable as of 1.0 (protocol version 2);
+see [`KNOWN-GAPS.md`](KNOWN-GAPS.md) §2 for the one X-Wing-draft caveat.
 
 ## Try it in 30 seconds
 
@@ -145,17 +147,19 @@ ML-KEM still protects you. You only lose if **both** fall.
 - **[Protocol spec](docs/protocol.md)** — wire format, key schedule, KAT references.
 - **[Changelog](CHANGELOG.md)** — full version history.
 
-### What's new in 0.3.0
+### What's new in 1.0.0
 
-- **`PostQuantum.SecureChannel.AspNetCore`** — DI registration, `IConfiguration` binding, WebSocket
-  adapter, `MapPqWebSocket()` endpoint helper.
-- **`PostQuantum.SecureChannel.Testing`** — in-memory duplex stream and one-call handshake harness.
-- **OpenTelemetry-friendly tracing** — `ActivitySource` alongside the existing `Meter` / `EventSource`.
-- **Production-shaped samples** — microservice WebSocket, worker → control-plane, queue envelope.
-- **Scenario-first docs** — architecture, threat model, decision guide, operations, troubleshooting.
+- **Stable API & wire format** — committed under Semantic Versioning (protocol version 2, unchanged
+  from `0.3.0-preview.2`). No breaking changes without a major-version bump.
+- **Property-based no-nonce-reuse sweep** — enumerates the record nonce across the sequence space and
+  key-update epochs, asserting no 96-bit nonce ever repeats (the catastrophic AES-GCM failure mode).
+- **Higher-order transcript-equivalence tests** — assert the transcript hash is an injective encoding
+  of the ordered fragment list, closing `docs/AUDIT-SCOPE.md` §3.
+- **Companion packages** — `PostQuantum.SecureChannel.AspNetCore` (DI, `IConfiguration`, WebSocket
+  adapter) and `PostQuantum.SecureChannel.Testing` (in-memory duplex, one-call harness).
 
-Earlier release notes (0.2.x DoS-resistant replay, NIST caps, multi-pin, presets, observability) are
-in the [changelog](CHANGELOG.md).
+Earlier release notes (0.3.x ecosystem + external-review remediation, 0.2.x DoS-resistant replay,
+NIST caps, multi-pin, presets, observability) are in the [changelog](CHANGELOG.md).
 
 ---
 
