@@ -6,6 +6,10 @@ obj/
 artifacts/
 *.user
 
+# Public-API snapshot: the .received.txt is written only on a surface mismatch and must never be
+# committed; the .approved.txt baseline IS committed.
+PublicApi.received.txt
+
 # NuGet
 *.nupkg
 *.snupkg

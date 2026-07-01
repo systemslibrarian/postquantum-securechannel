@@ -1,8 +1,49 @@
 # Changelog
 
 All notable changes to PostQuantum.SecureChannel are documented here. This project follows
-[Semantic Versioning](https://semver.org/). While pre-1.0, the wire format and API may change between
-preview releases.
+[Semantic Versioning](https://semver.org/). As of 1.0.0 the public API and wire format are stable:
+breaking changes require a major-version bump. The one forward-looking caveat is the X-Wing combiner,
+which tracks an IETF draft — a combiner change in the final RFC would be a major-version wire break
+(see `KNOWN-GAPS.md` §2).
+
+## [1.0.0]
+
+**First stable release.** Commits to a stable public API and wire format (protocol version 2) under
+Semantic Versioning. **There is no wire-format change from `0.3.0-preview.2`** — a peer built from
+`0.3.0-preview.2` interoperates with `1.0.0`. This release is the stabilization of that wire format,
+not a change to it.
+
+### Added
+
+- **Property-based no-nonce-reuse sweep** (`NonceUniquenessTests`). Enumerates the record-layer
+  nonce (`ivPrefix ‖ sequence`) across a wide window at both ends of the `[0, 2^32)` sequence space
+  and across many key-update epochs, asserting no 96-bit nonce ever repeats — the single most
+  catastrophic AES-GCM failure mode. Closes `docs/AUDIT-SCOPE.md` §5's "no test that programmatically
+  enumerates a very large window across a key update" gap.
+- **Higher-order transcript-equivalence tests** (`TranscriptEquivalenceTests`). Order sensitivity,
+  exhaustive three-way repartition of fixed flat bytes, pre-framed nesting confusion, forged
+  length-prefix, and positional significance of empty fragments — asserting `Transcript.Hash` is an
+  injective encoding of the ordered fragment *list*, not just its concatenation. Closes the
+  transcript-equivalence item flagged in `docs/AUDIT-SCOPE.md` §3.
+
+### Changed
+
+- `PqProtocol.Version` remains `2`. API surface is now frozen under SemVer.
+
+### Not changed
+
+The X-Wing combiner, ML-DSA-65 signature flow, AES-256-GCM record framing, key schedule,
+anti-replay logic, NIST SP 800-38D caps, and the three-message handshake state machine are all
+identical to `0.3.0-preview.2`.
+
+### Honest status
+
+**1.0.0 has not been independently audited.** An external cryptographic review of the protocol
+composition has not been performed and is not feasible at this time. The primitives are validated
+against published IETF/NIST vectors and the composition is covered by this repository's own test
+suite (now including the two additions above), but that is not a substitute for third-party review.
+See `KNOWN-GAPS.md` §1. The "stable" commitment above is about API/wire compatibility, not an audit
+claim.
 
 ## [0.3.0-preview.2]
 

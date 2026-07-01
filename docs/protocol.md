@@ -1,14 +1,16 @@
 # PostQuantum.SecureChannel — Protocol Specification (v2)
 
 This document describes the wire protocol and key schedule for PostQuantum.SecureChannel protocol
-version `2` (library `0.3.0-preview.1`). It is intended to be precise enough to audit and to
-reimplement.
+version `2` (library `1.0.0`). It is intended to be precise enough to audit and to reimplement.
 
-> **Pre-1.0:** this format may change between preview releases. **Protocol version 2 landed inside
-> the `0.3.0-preview.1` window as remediation for an external review of the HKDF info construction
-> (Finding 2) and transcript framing (Finding 3).** It is not wire-compatible with version 1; a v1
-> peer and a v2 peer fail cleanly at version negotiation. The message-format byte and the negotiated
-> protocol version guard against silently mixing incompatible peers.
+> **Stable as of 1.0.** This wire format (protocol version 2) is stable under Semantic Versioning: it
+> will not change incompatibly without a major-version bump. **Protocol version 2 originally landed
+> inside the `0.3.0-preview.1` window as remediation for an external review of the HKDF info
+> construction (Finding 2) and transcript framing (Finding 3),** and is unchanged through `1.0.0`. It
+> is not wire-compatible with version 1; a v1 peer and a v2 peer fail cleanly at version negotiation.
+> The message-format byte and the negotiated protocol version guard against silently mixing
+> incompatible peers. The one anticipated future wire change is the X-Wing combiner tracking its final
+> RFC, which would ship as a major version — see `KNOWN-GAPS.md` §2.
 
 ## 1. Primitives
 

@@ -5,19 +5,22 @@ transparent about both its strengths and its limits.
 
 ## Status
 
-**This is a preview (0.2.1-preview.1) and has not undergone an independent security audit.** The
-cryptographic core is validated against published IETF/NIST test vectors, but absence of a finding is
-not a proof of security. Do not rely on it as your sole protection for high-value secrets until it has
-been independently reviewed. See [`KNOWN-GAPS.md`](KNOWN-GAPS.md) for specifics.
+**This is 1.0.0. The API and wire format are stable, but it has not undergone an independent security
+audit** — and one is not feasible at this time. The cryptographic core is validated against published
+IETF/NIST test vectors and the protocol composition is covered by this repository's own test suite,
+but absence of a finding is not a proof of security. Do not rely on it as your sole protection for
+high-value secrets if you cannot accept the risk of an unreviewed composition. See
+[`KNOWN-GAPS.md`](KNOWN-GAPS.md) §1 for specifics.
 
 ## Supported versions
 
 | Version | Supported |
 | --- | --- |
-| 0.2.x-preview | ✅ (pre-release, best-effort) |
-| 0.1.x-preview | ❌ (superseded; wire format changed in 0.2) |
+| 1.x | ✅ |
+| 0.x-preview | ❌ (superseded by 1.0; `0.3.0-preview.2` is wire-compatible with 1.0 but unsupported) |
 
-Until 1.0, only the latest preview is supported. APIs and the wire format may change between previews.
+Under Semantic Versioning, the `1.x` line receives fixes; breaking API or wire changes would ship as
+a new major version. The pre-1.0 previews are no longer supported.
 
 ## Reporting a vulnerability
 
