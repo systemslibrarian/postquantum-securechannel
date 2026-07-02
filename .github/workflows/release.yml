@@ -33,7 +33,7 @@ jobs:
           fetch-depth: 0  # SourceLink and deterministic builds need full history
 
       - name: Setup .NET (8 / 9 / 10)
-        uses: actions/setup-dotnet@v4
+        uses: actions/setup-dotnet@v5
         with:
           dotnet-version: |
             8.0.x
