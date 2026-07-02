@@ -25,7 +25,8 @@ weaknesses.
 - You need a finalized standard with broad cross-language tooling today. The cryptographic
   primitives are standardized (FIPS 203, FIPS 204); the X-Wing combiner is still on the IETF
   standards track (`draft-connolly-cfrg-xwing-kem`).
-- You need an audited, production-ready library. This is preview, unaudited; see
+- You need an independently audited library. This is 1.0 (stable API and wire format) but
+  unaudited — an external review is not currently fundable; see
   [`KNOWN-GAPS.md`](../KNOWN-GAPS.md).
 
 ## Comparison
@@ -36,7 +37,7 @@ weaknesses.
 | PQ confidentiality | ✅ X-Wing hybrid | ⚠ Hybrid KEX in TLS 1.3 with newer drafts only | varies by pattern | ❌ no PQ KEM today |
 | Mutual auth | ✅ ML-DSA, pinned keys | ✅ X.509 client certs | ✅ static keys / patterns | DIY |
 | Trust model | Raw-key pinning | X.509 / WebPKI / mTLS | Raw-key, your choice | DIY |
-| Operational maturity | Preview, unaudited | Decades, audited | Mature, well-modelled | Mature, widely deployed |
+| Operational maturity | Stable 1.0 API/wire, unaudited | Decades, audited | Mature, well-modelled | Mature, widely deployed |
 | Cross-language interop | Spec is small; only .NET implementation today | Universal | Many implementations | C / wrappers everywhere |
 | Browser compatibility | ❌ | ✅ | ❌ | ❌ |
 | Best for | .NET-to-.NET app-layer channels with PQ defence in depth | Any transport security, anywhere | Custom protocols, embedded devices | Building your own crypto |

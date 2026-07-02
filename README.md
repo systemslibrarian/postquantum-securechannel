@@ -116,10 +116,10 @@ for the per-property test-coverage map.
 | **DoS-resistant replay window** | Sliding window is a fixed-size bitmap; a peer cannot influence receiver memory |
 | **Observable** | `EventSource` + `Meter` + `ActivitySource` named `PostQuantum.SecureChannel` |
 
-> ⚠ **Preview release.** The cryptographic core is validated against published IETF/NIST test
-> vectors, but this library has **not** had an independent security audit. Read
-> [`KNOWN-GAPS.md`](KNOWN-GAPS.md) and [`docs/threat-model.md`](docs/threat-model.md) before relying
-> on it for high-value secrets.
+> ⚠ **Not independently audited.** The cryptographic core is validated against published IETF/NIST
+> test vectors, but the protocol composition has **not** had an independent security audit — and we
+> are not able to fund one at this time. Read [`KNOWN-GAPS.md`](KNOWN-GAPS.md) and
+> [`docs/threat-model.md`](docs/threat-model.md) before relying on it for high-value secrets.
 
 ---
 
