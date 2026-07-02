@@ -46,6 +46,7 @@ PqIdentityPublicKey :: string ToString()
 PqIncomingRecord :: PqContentType ContentType { get; }
 PqIncomingRecord :: byte[] Payload { get; }
 PqKeyUpdatePolicy :: .ctor()
+PqKeyUpdatePolicy :: TimeSpan? MaxAge { get; init; }
 PqKeyUpdatePolicy :: static PqKeyUpdatePolicy Disabled { get; }
 PqKeyUpdatePolicy :: static PqKeyUpdatePolicy Recommended { get; }
 PqKeyUpdatePolicy :: ulong? MaxBytesBeforeUpdate { get; init; }
@@ -107,6 +108,7 @@ PqSession :: void Dispose()
 PqSessionOptions :: .ctor()
 PqSessionOptions :: PqKeyUpdatePolicy KeyUpdatePolicy { get; init; }
 PqSessionOptions :: PqReplayProtection ReplayProtection { get; init; }
+PqSessionOptions :: TimeProvider TimeProvider { get; init; }
 PqSessionOptions :: int ReplayWindowSize { get; init; }
 PqSessionOptions :: static PqSessionOptions Default { get; }
 PqSessionOptions :: static PqSessionOptions HighThroughput { get; }

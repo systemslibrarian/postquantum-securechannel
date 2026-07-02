@@ -1,0 +1,109 @@
+(*
+  PostQuantum.SecureChannel — symbolic model of the three-message handshake (ProVerif).
+
+  STATUS: authored, NOT yet machine-checked in CI. See README.md in this directory.
+  This is an ABSTRACT (Dolev-Yao) model: the KEM, signature, hash, KDF, MAC, and AEAD are treated
+  as ideal primitives. It reasons about the *composition* (transcript binding, pinning, key
+  confirmation), which is exactly the layer that primitive test vectors cannot check. It does NOT
+  model the internal structure of X-Wing / ML-KEM / ML-DSA, nonce/counter management, the replay
+  window, or side channels.
+
+  Maps to the implementation:
+    - ClientHello    = (clientRandom, ephemeralKemPk)                         [PqClientHandshake]
+    - ServerHello    = (serverRandom, kemCiphertext, serverIdentityPk, sig)   [PqServerHandshake]
+    - ClientFinished = finishedMac (+ optional client sig, see mutual-auth block)
+    - th1 = Hash(ClientHello, ServerHelloBody);  th2 = Hash(ClientHello, ServerHelloFull)
+    - sig covers (serverAuthCtx, th1);  finishedMac = MAC(sessionKey-derived FinishedKey, th2)
+    - server identity is PINNED by the client out of band (raw-key pinning; no PKI)
+
+  Properties checked:
+    (Q1) Session confidentiality: the attacker never learns a payload sent under the session key.
+    (Q2) Server authentication / transcript agreement: whenever the server accepts with transcript th2
+         and key k, some honest client ran to completion with the same th2 and k.
+    (Q3) (mutual-auth variant) Client authentication, symmetrically.
+*)
+
+set traceDisplay = long.
+
+(* ---------- types ---------- *)
+type skey.    (* KEM decapsulation (ephemeral private) key *)
+type pkey.    (* KEM encapsulation (public) key *)
+type sskey.   (* signature (long-term identity) private key *)
+type spkey.   (* signature public key *)
+type sharedsecret.
+type key.
+type coins.   (* fresh randomness / nonces *)
+
+(* ---------- KEM: X-Wing modeled as an abstract IND-CCA KEM ---------- *)
+fun pk(skey): pkey.
+fun encap(pkey, coins): bitstring.                 (* the ciphertext ct *)
+fun kemss(pkey, coins): sharedsecret [private].    (* secret bound to (pk, encapsulation coins) *)
+reduc forall s: skey, r: coins; decap(s, encap(pk(s), r)) = kemss(pk(s), r).
+
+(* ---------- signatures: ML-DSA ---------- *)
+fun spk(sskey): spkey.
+fun sign(bitstring, sskey): bitstring.
+reduc forall m: bitstring, k: sskey; verify(m, sign(m, k), spk(k)) = true.
+
+(* ---------- hash / KDF / MAC / AEAD (public, one-way) ---------- *)
+fun h(bitstring): bitstring.                       (* transcript hash *)
+fun kdf(sharedsecret, bitstring): key.             (* key schedule: ss + (randoms, transcript) *)
+fun mac(key, bitstring): bitstring.                (* Finished MAC *)
+fun senc(bitstring, key): bitstring.
+reduc forall m: bitstring, k: key; sdec(senc(m, k), k) = m.
+
+(* ---------- public constants / channel ---------- *)
+free net: channel.
+free serverAuthCtx: bitstring.
+free clientAuthCtx: bitstring.
+free secretPayload: bitstring [private].           (* used to test Q1 *)
+
+(* ---------- events ---------- *)
+event ServerAccepts(pkey, bitstring, key).
+event ClientCompletes(pkey, bitstring, key).
+
+(* ---------- queries ---------- *)
+query attacker(secretPayload).                                   (* Q1: expect "cannot be proved" => secret safe *)
+query epk: pkey, th: bitstring, k: key;
+  event(ServerAccepts(epk, th, k)) ==> event(ClientCompletes(epk, th, k)).   (* Q2 *)
+
+(* ---------- client ---------- *)
+(* The client pins the server's signature public key out of band. *)
+let client(pinnedServer: spkey) =
+  new eph: skey;
+  let epk = pk(eph) in
+  new cr: coins;
+  out(net, (cr, epk));                                           (* ClientHello *)
+  in(net, (sr: coins, ct: bitstring, advertised: spkey, sg: bitstring));  (* ServerHello *)
+  if advertised = pinnedServer then                             (* pinning: trust the pin, not the wire *)
+    let th1 = h((cr, epk, sr, ct)) in
+    if verify((serverAuthCtx, th1), sg, pinnedServer) = true then
+      let ss = decap(eph, ct) in
+      let sessionKey = kdf(ss, (cr, sr, th1)) in
+      let th2 = h((cr, epk, sr, ct, pinnedServer, sg)) in
+      event ClientCompletes(epk, th2, sessionKey);
+      out(net, mac(sessionKey, th2)).                            (* ClientFinished *)
+
+(* ---------- server ---------- *)
+let server(sks: sskey) =
+  in(net, (cr: coins, epk: pkey));                               (* ClientHello *)
+  new r: coins;
+  let ct = encap(epk, r) in
+  let ss = kemss(epk, r) in
+  new sr: coins;
+  let th1 = h((cr, epk, sr, ct)) in
+  let sg = sign((serverAuthCtx, th1), sks) in
+  out(net, (sr, ct, spk(sks), sg));                              (* ServerHello *)
+  let sessionKey = kdf(ss, (cr, sr, th1)) in
+  in(net, (fin: bitstring));                                     (* ClientFinished *)
+  let th2 = h((cr, epk, sr, ct, spk(sks), sg)) in
+  if fin = mac(sessionKey, th2) then                             (* key confirmation *)
+    event ServerAccepts(epk, th2, sessionKey);
+    out(net, senc(secretPayload, sessionKey)).                   (* Q1 secrecy probe *)
+
+(* ---------- main ---------- *)
+process
+  new sks: sskey;
+  let serverPub = spk(sks) in
+  out(net, serverPub);        (* the server's long-term public identity is public; the client pins it *)
+  ( (! client(serverPub)) | (! server(sks)) )

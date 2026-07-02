@@ -82,6 +82,8 @@ public sealed class PqSession : IDisposable
     private readonly DirectionState _recv;
     private readonly byte[] _resumptionSecret;
     private readonly PqKeyUpdatePolicy _keyUpdatePolicy;
+    private readonly TimeProvider _timeProvider;
+    private long _sendEpochStartedAt;
     private bool _disposed;
 
     internal PqSession(
@@ -90,6 +92,8 @@ public sealed class PqSession : IDisposable
         Role = role;
         RemoteIdentity = remoteIdentity;
         _keyUpdatePolicy = options.KeyUpdatePolicy;
+        _timeProvider = options.TimeProvider;
+        _sendEpochStartedAt = _timeProvider.GetTimestamp();
         _resumptionSecret = (byte[])schedule.ResumptionSecret.Clone();
 
         // The sender of one direction is the receiver of the other: pick traffic secrets by role.
@@ -127,6 +131,7 @@ public sealed class PqSession : IDisposable
     /// </summary>
     public bool NeedsKeyUpdate =>
         _keyUpdatePolicy.IsExceededBy(_send.Sequence, _send.BytesThisEpoch)
+        || (_keyUpdatePolicy.MaxAge is { } maxAge && _timeProvider.GetElapsedTime(_sendEpochStartedAt) >= maxAge)
         || _send.Sequence >= MaxRecordsPerEpoch - (MaxRecordsPerEpoch >> 8)
         || _send.BytesThisEpoch >= MaxBytesPerEpoch - (MaxBytesPerEpoch >> 8);
 
@@ -230,6 +235,7 @@ public sealed class PqSession : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
         var record = Seal(PqProtocol.RecordKeyUpdate, ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty);
         _send.Ratchet();
+        _sendEpochStartedAt = _timeProvider.GetTimestamp();
         PqDiagnostics.KeyUpdated(Role, isReceive: false, _send.Epoch);
         return record;
     }

@@ -15,16 +15,28 @@ not a change to it.
 
 ### Added
 
-- **Property-based no-nonce-reuse sweep** (`NonceUniquenessTests`). Enumerates the record-layer
-  nonce (`ivPrefix ‖ sequence`) across a wide window at both ends of the `[0, 2^32)` sequence space
-  and across many key-update epochs, asserting no 96-bit nonce ever repeats — the single most
-  catastrophic AES-GCM failure mode. Closes `docs/AUDIT-SCOPE.md` §5's "no test that programmatically
-  enumerates a very large window across a key update" gap.
+- **Time-based auto-rekey.** `PqKeyUpdatePolicy.MaxAge` bounds the wall-clock age of an active send
+  epoch, complementing the existing record/byte thresholds, and is evaluated against an injectable
+  `PqSessionOptions.TimeProvider` (deterministically testable). `PqKeyUpdatePolicy.Recommended` now
+  includes a one-hour age bound. Like the other thresholds it triggers on the next send; a fully idle
+  connection is still not proactively rekeyed (documented in `KNOWN-GAPS.md` §5).
+- **Public-API freeze guard** (`PublicApiSurfaceTests` + `PublicApi.approved.txt`). Snapshots the entire
+  exported surface; any breaking change fails the build, making the SemVer commitment enforceable.
+- **Property-based no-nonce-reuse checks** (`NonceUniquenessTests`). Asserts the two deterministic,
+  load-bearing invariants — intra-epoch nonce uniqueness across the `[0, 2^32)` sequence window, and a
+  distinct 256-bit traffic secret per epoch — closing `docs/AUDIT-SCOPE.md` §5.
 - **Higher-order transcript-equivalence tests** (`TranscriptEquivalenceTests`). Order sensitivity,
   exhaustive three-way repartition of fixed flat bytes, pre-framed nesting confusion, forged
   length-prefix, and positional significance of empty fragments — asserting `Transcript.Hash` is an
-  injective encoding of the ordered fragment *list*, not just its concatenation. Closes the
-  transcript-equivalence item flagged in `docs/AUDIT-SCOPE.md` §3.
+  injective encoding of the ordered fragment *list*. Closes `docs/AUDIT-SCOPE.md` §3.
+- **Property-based test suite** (`PropertyTests`). Randomized record round-trips, an anti-replay window
+  checked against a reference model over tens of thousands of steps, and framing round-trip/rejection
+  properties (`docs/AUDIT-SCOPE.md` §11).
+- **Symbolic protocol model** (`formal/xwing-handshake.pv`, ProVerif) covering session confidentiality
+  and transcript agreement. Authored as a reviewable specification; **not yet machine-checked** — see
+  `formal/README.md`.
+- **`ROADMAP.md`** — an honest public plan, including that an independent audit is currently blocked on
+  funding.
 
 ### Hardening (from an internal pre-1.0 review; none are wire-format changes)
 
@@ -38,6 +50,10 @@ not a change to it.
   secret and disposes the key schedule in a `finally`, closing an exception-path leak.
 - **`maxFrameSize` is validated.** `ConnectAsync`/`AcceptAsync` reject a non-positive `maxFrameSize`
   (previously a negative value cast to a huge `uint` bound, disabling the allocation guard).
+- **Transient secrets are zeroed.** The expanded ML-KEM/X25519 private key, the per-operation KEM
+  shared-secret halves, and the seed copies handed to BouncyCastle are now zeroed after use
+  (`XWing.cs`, `MlDsaSignature.cs`), tightening the zeroization boundary beyond long-lived keys
+  (`KNOWN-GAPS.md` §8).
 - **Test correctness:** the epoch-keying nonce test now asserts the deterministic, load-bearing
   invariants (intra-epoch nonce uniqueness across the sequence window + distinct 256-bit per-epoch
   traffic secret) instead of a birthday-flaky 32-bit IV-prefix distinctness claim.

@@ -81,10 +81,12 @@ In-band **key update** is supported (`PqSession.UpdateSendKey` / `PqSecureChanne
 each direction can ratchet to fresh keys without a new handshake. The hard caps per epoch are now
 `PqSession.MaxRecordsPerEpoch = 2^32` (matching NIST SP 800-38D's deterministic-IV invocation cap)
 and `PqSession.MaxBytesPerEpoch = 2^36` (~64 GiB, the AES-GCM data bound); exceeding either raises
-`PqEpochExhaustedException`. A record/byte-threshold **auto-rekey policy** (`PqKeyUpdatePolicy`) is
-available and honoured by the stream adapter, but it is **count-based, not time-based** — there is
-no built-in periodic/timer rekey, and a key update is only emitted when you next send (it does not
-proactively rekey an idle connection).
+`PqEpochExhaustedException`. An **auto-rekey policy** (`PqKeyUpdatePolicy`) is available and honoured
+by the stream adapter, with record, byte, and (as of 1.0) **wall-clock age** thresholds
+(`MaxAge`, evaluated against an injectable `PqSessionOptions.TimeProvider`). The remaining caveat is
+that every threshold — age included — is checked **on the next send**: a key update is only emitted
+when you write, so a fully **idle** connection is not proactively rekeyed. If you need an idle
+long-lived connection to rotate keys on a timer, drive `UpdateSendKeyAsync` yourself.
 
 **Resumption** (`ResumptionSecret`) is **experimental**. It mixes a shared secret into the key schedule
 of a *full* (still forward-secret) handshake to bind sessions together; it does **not** provide a
@@ -144,13 +146,15 @@ overall timing/cache/power side-channel resistance is only as good as the underl
 .NET implementations, and this has **not** been independently measured for this library. Managed .NET
 also cannot guarantee secret data is never copied by the GC.
 
-**Zeroization covers long-lived key material, not every transient.** Session traffic secrets, the key
-schedule, identity seeds, and the X-Wing/handshake ephemeral keys are zeroed on `Dispose` (including
-on handshake failure paths). But short-lived *derived intermediates* inside the KEM and signature
-routines — e.g. the expanded ML-KEM/X25519 private key, the per-encapsulation KEM shared-secret halves,
-and the `byte[]` seed copies handed to BouncyCastle — are left for the GC to reclaim rather than being
-individually zeroed, partly because BouncyCastle's own key objects are not zeroable. In managed memory
-this is a best-effort boundary, not a guarantee that no secret byte outlives its use.
+**Zeroization is thorough but bounded by BouncyCastle.** Session traffic secrets, the key schedule,
+identity seeds, and the X-Wing/handshake ephemeral keys are zeroed on `Dispose` (including on handshake
+failure paths). As of 1.0 the short-lived *derived intermediates* this code controls are also zeroed:
+the expanded ML-KEM/X25519 private key, the per-operation KEM shared-secret halves, and the `byte[]`
+seed copies handed to BouncyCastle (see `Cryptography/XWing.cs`, `MlDsaSignature.cs`). What remains
+outside our control is BouncyCastle's own internal handling — its key objects are not zeroable, so
+secret bytes may still be copied inside the provider — and the fact that managed .NET cannot guarantee
+the GC never relocates a buffer before it is zeroed. This is a best-effort boundary, not a guarantee
+that no secret byte ever outlives its use.
 
 ## 9. Not constant-time against malformed input in every path
 

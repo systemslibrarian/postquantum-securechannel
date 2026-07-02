@@ -72,6 +72,13 @@ public sealed class PqSessionOptions
     /// </summary>
     public PqKeyUpdatePolicy KeyUpdatePolicy { get; init; } = PqKeyUpdatePolicy.Disabled;
 
+    /// <summary>
+    /// Clock used to evaluate <see cref="PqKeyUpdatePolicy.MaxAge"/> for time-based auto-rekey. Defaults
+    /// to <see cref="System.TimeProvider.System"/>. Override it (e.g. with a fake provider) to drive
+    /// epoch age deterministically in tests. Has no effect unless the policy sets <c>MaxAge</c>.
+    /// </summary>
+    public TimeProvider TimeProvider { get; init; } = TimeProvider.System;
+
     internal void Validate()
     {
         if (ReplayProtection == PqReplayProtection.SlidingWindow && (ReplayWindowSize < 8 || ReplayWindowSize > 1024))

@@ -11,13 +11,14 @@ public sealed class PqKeyUpdatePolicy
     public static PqKeyUpdatePolicy Disabled { get; } = new();
 
     /// <summary>
-    /// A conservative recommendation for long-lived connections: update after 16 million records or
-    /// 4 GiB sent in the current epoch, whichever comes first.
+    /// A conservative recommendation for long-lived connections: update after 16 million records,
+    /// 4 GiB sent, or one hour in the current epoch, whichever comes first.
     /// </summary>
     public static PqKeyUpdatePolicy Recommended { get; } = new()
     {
         MaxRecordsBeforeUpdate = 1UL << 24,
         MaxBytesBeforeUpdate = 1UL << 32,
+        MaxAge = TimeSpan.FromHours(1),
     };
 
     /// <summary>Update after this many records in the current send epoch, if set.</summary>
@@ -25,6 +26,13 @@ public sealed class PqKeyUpdatePolicy
 
     /// <summary>Update after this many plaintext bytes in the current send epoch, if set.</summary>
     public ulong? MaxBytesBeforeUpdate { get; init; }
+
+    /// <summary>
+    /// Update once the current send epoch has been active this long, if set. Like the record/byte
+    /// thresholds, this is evaluated on the next send: a fully idle connection is not proactively
+    /// rekeyed. Evaluated against <see cref="PqSessionOptions.TimeProvider"/>.
+    /// </summary>
+    public TimeSpan? MaxAge { get; init; }
 
     internal bool IsExceededBy(ulong records, ulong bytes)
         => (MaxRecordsBeforeUpdate is { } r && records >= r)
@@ -42,6 +50,12 @@ public sealed class PqKeyUpdatePolicy
         {
             throw new ArgumentOutOfRangeException(
                 nameof(MaxBytesBeforeUpdate), "Must be null (disabled) or greater than zero.");
+        }
+
+        if (MaxAge is { } age && age <= TimeSpan.Zero)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(MaxAge), "Must be null (disabled) or a positive duration.");
         }
     }
 }

@@ -36,7 +36,16 @@ public sealed class XWingKeyPair : IDisposable
 
         var copy = (byte[])seed.Clone();
         var expanded = XWing.ExpandPrivateKey(copy);
-        return new XWingKeyPair(copy, expanded.PublicKey);
+        try
+        {
+            // The key pair keeps only the 32-byte seed (re-expanded on demand); the derived ML-KEM
+            // seed and X25519 scalar are transient here and must not linger.
+            return new XWingKeyPair(copy, expanded.PublicKey);
+        }
+        finally
+        {
+            expanded.ClearSecrets();
+        }
     }
 
     /// <summary>Decapsulates a ciphertext produced against <see cref="PublicKey"/>.</summary>

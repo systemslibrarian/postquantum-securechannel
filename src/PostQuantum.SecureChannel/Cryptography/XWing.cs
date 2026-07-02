@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Kems;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Security;
@@ -90,21 +91,33 @@ public static class XWing
         }
 
         var expanded = ExpandPrivateKey(privateKey);
+        byte[]? ssM = null;
+        byte[]? ssX = null;
+        try
+        {
+            var ctM = ciphertext[..MlKemCiphertextSize];
+            var ctX = ciphertext.Slice(MlKemCiphertextSize, X25519Size);
 
-        var ctM = ciphertext[..MlKemCiphertextSize];
-        var ctX = ciphertext.Slice(MlKemCiphertextSize, X25519Size);
+            // ss_M = ML-KEM-768.Decaps(ct_M, dk_M)
+            var decap = new MLKemDecapsulator(MLKemParameters.ml_kem_768);
+            decap.Init(MLKemPrivateKeyParameters.FromSeed(MLKemParameters.ml_kem_768, expanded.MlKemSeed));
+            ssM = new byte[decap.SecretLength];
+            decap.Decapsulate(ctM, ssM);
 
-        // ss_M = ML-KEM-768.Decaps(ct_M, dk_M)
-        var decap = new MLKemDecapsulator(MLKemParameters.ml_kem_768);
-        decap.Init(MLKemPrivateKeyParameters.FromSeed(MLKemParameters.ml_kem_768, expanded.MlKemSeed));
-        var ssM = new byte[decap.SecretLength];
-        decap.Decapsulate(ctM, ssM);
+            // ss_X = X25519(sk_X, ct_X)
+            ssX = new byte[X25519Size];
+            BcX25519.ScalarMult(expanded.X25519PrivateKey, ctX, ssX);
 
-        // ss_X = X25519(sk_X, ct_X)
-        var ssX = new byte[X25519Size];
-        BcX25519.ScalarMult(expanded.X25519PrivateKey, ctX, ssX);
-
-        return Combiner(ssM, ssX, ctX, expanded.X25519PublicKey);
+            return Combiner(ssM, ssX, ctX, expanded.X25519PublicKey);
+        }
+        finally
+        {
+            // Zero the derived private key and the KEM shared-secret halves; only the combined,
+            // HKDF-bound result leaves this method (and the caller zeroes that in turn).
+            expanded.ClearSecrets();
+            CryptographicOperations.ZeroMemory(ssM);
+            CryptographicOperations.ZeroMemory(ssX);
+        }
     }
 
     /// <summary>
@@ -120,27 +133,40 @@ public static class XWing
         var mlkemMessage = randomness64[..32].ToArray();
         var ephemeralX = randomness64.Slice(32, 32);
 
-        // X25519 ephemeral: ct_X = X25519(ek_X, base), ss_X = X25519(ek_X, pk_X)
-        var ctX = new byte[X25519Size];
-        BcX25519.ScalarMultBase(ephemeralX, ctX);
-        var ssX = new byte[X25519Size];
-        BcX25519.ScalarMult(ephemeralX, pkX, ssX);
+        byte[]? ssX = null;
+        byte[]? ssM = null;
+        try
+        {
+            // X25519 ephemeral: ct_X = X25519(ek_X, base), ss_X = X25519(ek_X, pk_X)
+            var ctX = new byte[X25519Size];
+            BcX25519.ScalarMultBase(ephemeralX, ctX);
+            ssX = new byte[X25519Size];
+            BcX25519.ScalarMult(ephemeralX, pkX, ssX);
 
-        // ML-KEM-768 encapsulation, deterministic in the supplied message.
-        var encap = new MLKemEncapsulator(MLKemParameters.ml_kem_768);
-        encap.Init(new ParametersWithRandom(
-            MLKemPublicKeyParameters.FromEncoding(MLKemParameters.ml_kem_768, pkM.ToArray()),
-            new SingleShotRandom(mlkemMessage)));
-        var ctM = new byte[encap.EncapsulationLength];
-        var ssM = new byte[encap.SecretLength];
-        encap.Encapsulate(ctM, 0, ctM.Length, ssM, 0, ssM.Length);
+            // ML-KEM-768 encapsulation, deterministic in the supplied message.
+            var encap = new MLKemEncapsulator(MLKemParameters.ml_kem_768);
+            encap.Init(new ParametersWithRandom(
+                MLKemPublicKeyParameters.FromEncoding(MLKemParameters.ml_kem_768, pkM.ToArray()),
+                new SingleShotRandom(mlkemMessage)));
+            var ctM = new byte[encap.EncapsulationLength];
+            ssM = new byte[encap.SecretLength];
+            encap.Encapsulate(ctM, 0, ctM.Length, ssM, 0, ssM.Length);
 
-        var sharedSecret = Combiner(ssM, ssX, ctX, pkX);
+            var sharedSecret = Combiner(ssM, ssX, ctX, pkX);
 
-        var ciphertext = new byte[CiphertextSize];
-        ctM.CopyTo(ciphertext.AsSpan(0));
-        ctX.CopyTo(ciphertext.AsSpan(MlKemCiphertextSize));
-        return (ciphertext, sharedSecret);
+            var ciphertext = new byte[CiphertextSize];
+            ctM.CopyTo(ciphertext.AsSpan(0));
+            ctX.CopyTo(ciphertext.AsSpan(MlKemCiphertextSize));
+            return (ciphertext, sharedSecret);
+        }
+        finally
+        {
+            // The secret ML-KEM message and both KEM shared-secret halves are transient; zero them so
+            // only the combined, HKDF-bound shared secret survives (the caller zeroes that in turn).
+            CryptographicOperations.ZeroMemory(mlkemMessage);
+            CryptographicOperations.ZeroMemory(ssX);
+            CryptographicOperations.ZeroMemory(ssM);
+        }
     }
 
     /// <summary>Derives the full public key (and intermediate keys) from a 32-byte seed.</summary>
@@ -167,7 +193,21 @@ public static class XWing
     // SS = SHA3-256(ss_M || ss_X || ct_X || pk_X || XWingLabel)
     private static byte[] Combiner(
         ReadOnlySpan<byte> ssM, ReadOnlySpan<byte> ssX, ReadOnlySpan<byte> ctX, ReadOnlySpan<byte> pkX)
-        => Sha3.Hash256(ssM.ToArray(), ssX.ToArray(), ctX.ToArray(), pkX.ToArray(), XWingLabel);
+    {
+        // ct_X and pk_X are public; the two shared-secret halves are the secret inputs and are the
+        // transient copies worth zeroing after hashing.
+        byte[] a = ssM.ToArray();
+        byte[] b = ssX.ToArray();
+        try
+        {
+            return Sha3.Hash256(a, b, ctX.ToArray(), pkX.ToArray(), XWingLabel);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(a);
+            CryptographicOperations.ZeroMemory(b);
+        }
+    }
 
     internal readonly struct ExpandedKey(byte[] mlKemSeed, byte[] x25519PrivateKey, byte[] x25519PublicKey, byte[] publicKey)
     {
@@ -175,6 +215,13 @@ public static class XWing
         internal byte[] X25519PrivateKey { get; } = x25519PrivateKey;
         internal byte[] X25519PublicKey { get; } = x25519PublicKey;
         internal byte[] PublicKey { get; } = publicKey;
+
+        /// <summary>Zeroes the secret components (the ML-KEM seed and the X25519 scalar).</summary>
+        internal void ClearSecrets()
+        {
+            CryptographicOperations.ZeroMemory(MlKemSeed);
+            CryptographicOperations.ZeroMemory(X25519PrivateKey);
+        }
     }
 
     /// <summary>A <see cref="SecureRandom"/> that emits a fixed buffer once, for deterministic ML-KEM encapsulation.</summary>

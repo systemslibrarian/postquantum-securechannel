@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using Org.BouncyCastle.Crypto.Parameters;
 using Org.BouncyCastle.Crypto.Signers;
 
@@ -29,18 +30,34 @@ public static class MlDsaSignature
     /// <summary>Derives the encoded public key from a private seed.</summary>
     public static byte[] DerivePublicKey(ReadOnlySpan<byte> privateSeed)
     {
-        var sk = MLDsaPrivateKeyParameters.FromSeed(Parameters, privateSeed.ToArray());
-        return sk.GetPublicKeyEncoded();
+        var seedCopy = privateSeed.ToArray();
+        try
+        {
+            var sk = MLDsaPrivateKeyParameters.FromSeed(Parameters, seedCopy);
+            return sk.GetPublicKeyEncoded();
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(seedCopy);
+        }
     }
 
     /// <summary>Signs <paramref name="message"/> with the private key identified by <paramref name="privateSeed"/>.</summary>
     public static byte[] Sign(ReadOnlySpan<byte> privateSeed, ReadOnlySpan<byte> message)
     {
-        var sk = MLDsaPrivateKeyParameters.FromSeed(Parameters, privateSeed.ToArray());
-        var signer = new MLDsaSigner(Parameters, deterministic: false);
-        signer.Init(forSigning: true, sk);
-        signer.BlockUpdate(message);
-        return signer.GenerateSignature();
+        var seedCopy = privateSeed.ToArray();
+        try
+        {
+            var sk = MLDsaPrivateKeyParameters.FromSeed(Parameters, seedCopy);
+            var signer = new MLDsaSigner(Parameters, deterministic: false);
+            signer.Init(forSigning: true, sk);
+            signer.BlockUpdate(message);
+            return signer.GenerateSignature();
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(seedCopy);
+        }
     }
 
     /// <summary>Verifies <paramref name="signature"/> over <paramref name="message"/> against an encoded public key.</summary>
