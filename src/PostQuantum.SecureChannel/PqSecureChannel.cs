@@ -421,7 +421,10 @@ public sealed class PqServerHandshake : IDisposable
     {
         if (cf.ClientIdentityPublicKey.Length == 0)
         {
-            if (_options.RequireClientAuthentication)
+            // An allowlist is meaningless if an anonymous client is admitted past it: treat a configured
+            // AuthorizedClients list as implying that client authentication is required, so the list can
+            // never be silently inert just because RequireClientAuthentication was left at its default.
+            if (_options.RequireClientAuthentication || _options.AuthorizedClients is { Count: > 0 })
             {
                 PqDiagnostics.HandshakeFailed(PqRole.Server, "client-auth-required");
                 throw new PqAuthenticationException("Client authentication is required but none was provided.");

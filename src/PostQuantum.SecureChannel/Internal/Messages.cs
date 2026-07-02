@@ -28,6 +28,7 @@ internal sealed class ClientHello
             Expect(versions.Length is > 0 and <= 64, "supported versions list");
             Expect(random.Length == PqProtocol.RandomSize, "client random size");
             Expect(kem.Length == XWing.PublicKeySize, "KEM public key size");
+            Expect(reader.IsEmpty, "trailing bytes after ClientHello");
             return new ClientHello { SupportedVersions = versions, ClientRandom = random, KemPublicKey = kem };
         }
         catch (FormatException ex)
@@ -100,6 +101,14 @@ internal sealed class ServerHello
                 throw new PqProtocolException("Invalid KEM ciphertext size in ServerHello.");
             }
 
+            if (!reader.IsEmpty)
+            {
+                // Reject non-canonical encodings: trailing bytes are covered neither by the server
+                // signature nor by the client's transcript re-serialization, so an active attacker could
+                // otherwise append data undetected. A conformant ServerHello ends exactly at the signature.
+                throw new PqProtocolException("Trailing bytes after ServerHello.");
+            }
+
             return new ServerHello
             {
                 NegotiatedVersion = negotiated,
@@ -140,12 +149,18 @@ internal sealed class ClientFinished
                 throw new PqProtocolException("Unsupported message format in ClientFinished.");
             }
 
-            return new ClientFinished
+            var clientFinished = new ClientFinished
             {
                 ClientIdentityPublicKey = reader.ReadBlock(),
                 ClientSignature = reader.ReadBlock(),
                 FinishedMac = reader.ReadBlock(),
             };
+            if (!reader.IsEmpty)
+            {
+                throw new PqProtocolException("Trailing bytes after ClientFinished.");
+            }
+
+            return clientFinished;
         }
         catch (FormatException ex)
         {

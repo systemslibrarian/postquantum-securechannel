@@ -47,7 +47,39 @@ not a change to it.
 - **`ROADMAP.md`** — an honest public plan, including that an independent audit is currently blocked on
   funding.
 
-### Hardening (from an internal pre-1.0 review; none are wire-format changes)
+### Hardening (from a pre-1.0 adversarial review; none are wire-format changes)
+
+- **Zeroization gaps closed on the X-Wing private-key path.** `XWing.ExpandPrivateKey` now zeroes the
+  full 96-byte expanded decapsulation key (the ML-KEM seed ‖ X25519 scalar), and `GenerateKeyPair`
+  zeroes the transient 32-byte master seed copy. Both were previously abandoned to the GC un-zeroed on
+  every handshake, contradicting the zeroization guarantee in `KNOWN-GAPS.md` §8 — now the code matches
+  the claim. `KeySchedule.Derive` likewise now zeroes the PRK, master, and salt (which carries the
+  resumption PSK) on the exception path, not only on success.
+- **An `AuthorizedClients` allowlist can no longer be silently bypassed.** Configuring a non-empty
+  allowlist now *implies* `RequireClientAuthentication`: an anonymous client is rejected even if that
+  flag was left at its default of `false`. Previously an allowlist set without the flag admitted any
+  anonymous client — an allowlist that enforced nothing.
+- **Handshake messages must be canonical.** `ClientHello`, `ServerHello`, and `ClientFinished` now
+  reject trailing bytes after the last field. Appended bytes on a `ServerHello` were covered by neither
+  the server signature nor the client's transcript re-serialization, so an active attacker could append
+  data undetected; the parsers now fail closed on any non-canonical encoding.
+- **Key-update control records authenticate independently of caller AAD.** A key update is sealed with
+  no application associated-data; `Open` now authenticates control records with the record header alone,
+  so an application that binds the same contextual AAD to *every* record no longer fails to open the
+  peer's key-update record (which would have permanently desynchronized the session after the sender
+  ratcheted). Application records still require matching AAD, and the authenticated content-type byte
+  prevents relabeling an application record as a control record.
+- **A session can always emit its key-update escape record.** `UpdateSendKey` reserves one AES-GCM
+  invocation beyond `MaxRecordsPerEpoch`, so a session that reaches the per-epoch record cap can still
+  send the key update its own exception message advises — previously that record hit the same
+  `PqEpochExhaustedException` and the send direction was unrecoverable.
+- **Oversized stream writes fail locally instead of poisoning the peer.** `PqSecureChannelStream.WriteAsync`
+  now rejects a write whose framed record would exceed `maxFrameSize` *before* encrypting (with an
+  actionable `ArgumentOutOfRangeException` naming the largest safe plaintext size), rather than emitting
+  a frame the remote reader rejects — which silently tore the channel down with no local error. A new
+  public `PqSession.RecordOverhead` constant makes the framing math explicit for callers.
+
+### Earlier hardening (from an internal pre-1.0 review; none are wire-format changes)
 
 - **AspNetCore: bounded inbound WebSocket reassembly.** `PqWebSocketStream` now caps the size of a
   single reassembled inbound message (`DefaultMaxReceiveMessageSize`, 16 MiB + slack, configurable),

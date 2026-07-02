@@ -137,6 +137,19 @@ public sealed class PqSecureChannelStream : Stream
             await UpdateSendKeyAsync(cancellationToken).ConfigureAwait(false);
         }
 
+        // The peer rejects any inbound frame larger than its own maxFrameSize and tears the channel down.
+        // Fail fast, locally, with an actionable error *before* encrypting — Encrypt advances the send
+        // sequence, so checking after it would consume a sequence number for a record we never send and
+        // desynchronize the stream. Account for the record's fixed header+tag overhead.
+        if (buffer.Length + PqSession.RecordOverhead > _maxFrameSize)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(buffer),
+                buffer.Length,
+                $"Encrypted record ({buffer.Length + PqSession.RecordOverhead} bytes) exceeds the {_maxFrameSize}-byte " +
+                $"frame limit; write at most {_maxFrameSize - PqSession.RecordOverhead} plaintext bytes per call, or raise maxFrameSize on both peers.");
+        }
+
         var record = _session.Encrypt(buffer.Span);
         await PqFraming.WriteFrameAsync(_inner, record, cancellationToken).ConfigureAwait(false);
     }

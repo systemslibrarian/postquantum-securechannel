@@ -62,6 +62,13 @@ public sealed class PqSession : IDisposable
     private const int HeaderSize = 1 + 1 + 8; // version + contentType + sequence
 
     /// <summary>
+    /// Fixed per-record overhead added to the plaintext to form a wire record: the 10-byte header
+    /// (version, content type, 64-bit sequence) plus the 16-byte AES-GCM tag. A record is therefore
+    /// exactly <c>plaintext.Length + RecordOverhead</c> bytes, which callers can use to size framing.
+    /// </summary>
+    public const int RecordOverhead = HeaderSize + TagSize;
+
+    /// <summary>
     /// Maximum number of records that may be sent within a single key epoch before a key update is
     /// required. Set to <c>2^32</c>, matching NIST SP 800-38D's invocation-count bound for AES-GCM with
     /// deterministic 96-bit IVs. Reaching it throws <see cref="PqEpochExhaustedException"/>.
@@ -192,7 +199,15 @@ public sealed class PqSession : IDisposable
         var ciphertext = record.Slice(HeaderSize, plaintextLength);
         var tag = record.Slice(HeaderSize + plaintextLength, TagSize);
 
-        var aad = BuildAssociatedData(record[..HeaderSize], associatedData);
+        // Application AAD binds application records only. Control records (key update) are always sealed
+        // with no caller AAD, so authenticate them with the header alone — otherwise a caller that passes
+        // the same contextual AAD to every Open() call would fail to authenticate the peer's key-update
+        // record (which the sender has already ratcheted past), permanently desynchronizing the session.
+        // The content-type byte lives in the header and is itself covered by the AAD, so an attacker
+        // cannot relabel an application record as a control record to strip its AAD binding.
+        ReadOnlySpan<byte> effectiveAad =
+            contentType == PqProtocol.RecordApplicationData ? associatedData : default;
+        var aad = BuildAssociatedData(record[..HeaderSize], effectiveAad);
         try
         {
             _recv.Cipher.Decrypt(nonce, ciphertext, tag, plaintext, aad);
@@ -233,7 +248,7 @@ public sealed class PqSession : IDisposable
     public byte[] UpdateSendKey()
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
-        var record = Seal(PqProtocol.RecordKeyUpdate, ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty);
+        var record = Seal(PqProtocol.RecordKeyUpdate, ReadOnlySpan<byte>.Empty, ReadOnlySpan<byte>.Empty, isControl: true);
         _send.Ratchet();
         _sendEpochStartedAt = _timeProvider.GetTimestamp();
         PqDiagnostics.KeyUpdated(Role, isReceive: false, _send.Epoch);
@@ -250,7 +265,8 @@ public sealed class PqSession : IDisposable
         return (byte[])_resumptionSecret.Clone();
     }
 
-    private byte[] Seal(byte contentType, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData)
+    private byte[] Seal(
+        byte contentType, ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> associatedData, bool isControl = false)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         if (plaintext.Length > MaxRecordPlaintextSize)
@@ -261,7 +277,13 @@ public sealed class PqSession : IDisposable
                 $"Plaintext exceeds the {MaxRecordPlaintextSize}-byte per-record limit; split into multiple records.");
         }
 
-        if (_send.Sequence >= MaxRecordsPerEpoch)
+        // Application data is capped at MaxRecordsPerEpoch invocations. The key-update control record is
+        // allowed exactly one slot beyond that cap so a session that reaches the limit can still emit the
+        // escape record UpdateSendKey() advertises, rather than throwing the very exception it tells the
+        // caller to resolve by calling UpdateSendKey. One extra AES-GCM invocation past 2^32 is
+        // cryptographically negligible, and it fails closed for all subsequent application data.
+        ulong recordCap = isControl ? MaxRecordsPerEpoch + 1 : MaxRecordsPerEpoch;
+        if (_send.Sequence >= recordCap)
         {
             PqDiagnostics.EpochExhausted(Role, isReceive: false, recordCap: true);
             throw new PqEpochExhaustedException(

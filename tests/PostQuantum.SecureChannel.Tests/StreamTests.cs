@@ -74,6 +74,34 @@ public class StreamTests
     }
 
     [Fact]
+    public async Task WriteAsync_AboveFrameLimit_FailsLocallyWithoutPoisoningPeer()
+    {
+        var (clientNet, serverNet) = await ConnectedPairAsync();
+        using var serverIdentity = PqIdentity.Create();
+
+        const int smallFrame = 16384; // above the ~6.4 KB ServerHello handshake frame, below our test write
+        var clientTask = PqSecureChannel.ConnectAsync(
+            clientNet, new PqClientOptions { ServerIdentity = serverIdentity.PublicKey }, maxFrameSize: smallFrame);
+        var serverTask = PqSecureChannel.AcceptAsync(
+            serverNet, new PqServerOptions { Identity = serverIdentity }, maxFrameSize: smallFrame);
+        await Task.WhenAll(clientTask, serverTask);
+        await using var client = await clientTask;
+        await using var server = await serverTask;
+
+        // A write whose encrypted frame would exceed the peer's frame limit must fail on THIS side,
+        // before anything is sent, rather than silently bricking the remote reader.
+        var tooBig = new byte[smallFrame]; // + record overhead pushes the frame over the limit
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(async () => await client.WriteAsync(tooBig));
+
+        // The channel is still healthy: a within-limit write round-trips normally.
+        var ok = Encoding.UTF8.GetBytes("still fine");
+        await client.WriteAsync(ok);
+        var buffer = new byte[ok.Length];
+        await server.ReadExactlyAsync(buffer);
+        Assert.Equal("still fine", Encoding.UTF8.GetString(buffer));
+    }
+
+    [Fact]
     public async Task SecureChannelStream_HandlesKeyUpdateTransparently()
     {
         var (clientNet, serverNet) = await ConnectedPairAsync();

@@ -61,8 +61,11 @@ public sealed class PqServerOptions
     public bool RequireClientAuthentication { get; init; }
 
     /// <summary>
-    /// An optional allowlist of client identities. When set, a presented client identity must appear in
-    /// this collection (compared by fingerprint) or the handshake is rejected.
+    /// An optional allowlist of client identities. When set (non-empty), the client must present an
+    /// identity whose full public key matches one in this collection (compared in constant time) or the
+    /// handshake is rejected. Setting a non-empty allowlist implies <see cref="RequireClientAuthentication"/>:
+    /// an anonymous client is rejected even if that flag is left at its default, so the allowlist can never
+    /// be silently bypassed.
     /// </summary>
     public IReadOnlyCollection<PqIdentityPublicKey>? AuthorizedClients { get; init; }
 

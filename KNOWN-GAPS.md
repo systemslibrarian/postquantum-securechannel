@@ -88,6 +88,21 @@ that every threshold — age included — is checked **on the next send**: a key
 when you write, so a fully **idle** connection is not proactively rekeyed. If you need an idle
 long-lived connection to rotate keys on a timer, drive `UpdateSendKeyAsync` yourself.
 
+**Key updates assume an ordered, reliable transport.** A key-update record carries no epoch identifier
+on the wire, and the receiver ratchets its receive direction the instant a key-update record
+authenticates. On an **unordered or lossy** transport (the `UnorderedTransport` preset's `SlidingWindow`
+target) this has two failure modes: (1) new-epoch records that *overtake* the key-update record are
+dropped, because the receiver is still on the old epoch's keys when they arrive; and (2) a **lost**
+key-update record permanently desynchronizes the direction — the sender is on epoch *e+1*, the receiver
+stays on *e*, and there is no epoch field to detect the skew or recover. These are availability/data-loss
+failures, not confidentiality breaks (AES-GCM still protects every delivered record). If you drive key
+updates on an unordered transport, do so only during a quiescent moment with no records in flight, or
+ensure the key-update record itself is delivered reliably and in order relative to the epoch it opens. An
+on-wire epoch field that makes rekeying robust under reordering/loss is a wire change and is tracked for
+**2.0** (`ROADMAP.md`). Note also that `UpdateSendKey` is atomic with respect to nonce safety — it never
+reuses a nonce — but see §6 on cancelled/failed writes leaving the epoch counters indeterminate on the
+stream adapter.
+
 **Resumption** (`ResumptionSecret`) is **experimental**. It mixes a shared secret into the key schedule
 of a *full* (still forward-secret) handshake to bind sessions together; it does **not** provide a
 shortened round-trip, ticket lifetimes, anti-replay for 0-RTT, or any server-side ticket store. Both

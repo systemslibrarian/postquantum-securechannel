@@ -65,6 +65,13 @@ These are what would turn "carefully engineered" into "independently assured." T
    adds a control record type, so it is a wire change. Until then, applications needing truncation
    detection should carry their own end-of-message marker (documented in `KNOWN-GAPS.md` §6).
 
+6a. **On-wire epoch field for reordering-robust rekey.** **[2.0]**
+   Key-update records carry no epoch identifier today, so a rekey interleaved with reordering or loss on
+   an unordered transport can drop records or permanently desynchronize a direction (`KNOWN-GAPS.md` §5).
+   An authenticated epoch field on each record — letting the receiver select the right epoch's keys and
+   detect a missed key update — makes rekeying robust under `SlidingWindow`, but changes the record
+   header, so it ships as a wire break with the other **[2.0]** items.
+
 ## Tier 3 — features (deferred, non-gating)
 
 7. **Mature resumption.** **[2.0-ish]**

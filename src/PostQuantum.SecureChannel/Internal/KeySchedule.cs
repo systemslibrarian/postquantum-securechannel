@@ -41,10 +41,15 @@ internal sealed class KeySchedule : IDisposable
         serverRandom.CopyTo(salt[clientRandom.Length..]);
         resumptionPsk.CopyTo(salt[(clientRandom.Length + serverRandom.Length)..]);
 
-        var prk = Hkdf.Extract(salt, sharedSecret);
-        var master = Hkdf.Expand(prk, PqProtocol.MasterInfo, SecretSize, transcriptHash);
+        // Derive PRK and master inside the try so that a throw anywhere (including the Extract/Expand
+        // that produce them) still zeroes the salt — which carries the resumption PSK — plus the PRK
+        // and master, rather than abandoning them to the GC on the exception path.
+        byte[]? prk = null;
+        byte[]? master = null;
         try
         {
+            prk = Hkdf.Extract(salt, sharedSecret);
+            master = Hkdf.Expand(prk, PqProtocol.MasterInfo, SecretSize, transcriptHash);
             return new KeySchedule(
                 Hkdf.Expand(master, PqProtocol.ClientToServerTrafficInfo, SecretSize),
                 Hkdf.Expand(master, PqProtocol.ServerToClientTrafficInfo, SecretSize),
@@ -55,8 +60,15 @@ internal sealed class KeySchedule : IDisposable
         finally
         {
             CryptographicOperations.ZeroMemory(salt);
-            CryptographicOperations.ZeroMemory(master);
-            CryptographicOperations.ZeroMemory(prk);
+            if (master is not null)
+            {
+                CryptographicOperations.ZeroMemory(master);
+            }
+
+            if (prk is not null)
+            {
+                CryptographicOperations.ZeroMemory(prk);
+            }
         }
     }
 

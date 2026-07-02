@@ -47,7 +47,16 @@ public static class XWing
     {
         var seed = new byte[PrivateKeySize];
         RandomBytes.Fill(seed);
-        return XWingKeyPair.FromSeed(seed);
+        try
+        {
+            // FromSeed clones the seed; this local is a second copy of the master private seed and
+            // must not be abandoned to the GC un-zeroed (the whole key pair re-derives from it).
+            return XWingKeyPair.FromSeed(seed);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(seed);
+        }
     }
 
     /// <summary>
@@ -173,21 +182,30 @@ public static class XWing
     internal static ExpandedKey ExpandPrivateKey(ReadOnlySpan<byte> seed)
     {
         // expanded = SHAKE256(sk, 96); [0:64] seeds ML-KEM KeyGen_internal(d, z); [64:96] is the X25519 scalar.
+        // The C# range operator copies into new arrays, so `expanded` itself is a third copy of the full
+        // expanded decapsulation key that ClearSecrets() cannot reach; zero it here once the slices are taken.
         var expanded = Sha3.Shake256(seed, 96);
-        var mlkemSeed = expanded[..64];
-        var skX = expanded[64..96];
+        try
+        {
+            var mlkemSeed = expanded[..64];
+            var skX = expanded[64..96];
 
-        var dkM = MLKemPrivateKeyParameters.FromSeed(MLKemParameters.ml_kem_768, mlkemSeed);
-        var pkM = dkM.GetPublicKeyEncoded();
+            var dkM = MLKemPrivateKeyParameters.FromSeed(MLKemParameters.ml_kem_768, mlkemSeed);
+            var pkM = dkM.GetPublicKeyEncoded();
 
-        var pkX = new byte[X25519Size];
-        BcX25519.ScalarMultBase(skX, pkX);
+            var pkX = new byte[X25519Size];
+            BcX25519.ScalarMultBase(skX, pkX);
 
-        var publicKey = new byte[PublicKeySize];
-        pkM.CopyTo(publicKey.AsSpan(0));
-        pkX.CopyTo(publicKey.AsSpan(MlKemPublicKeySize));
+            var publicKey = new byte[PublicKeySize];
+            pkM.CopyTo(publicKey.AsSpan(0));
+            pkX.CopyTo(publicKey.AsSpan(MlKemPublicKeySize));
 
-        return new ExpandedKey(mlkemSeed, skX, pkX, publicKey);
+            return new ExpandedKey(mlkemSeed, skX, pkX, publicKey);
+        }
+        finally
+        {
+            CryptographicOperations.ZeroMemory(expanded);
+        }
     }
 
     // SS = SHA3-256(ss_M || ss_X || ct_X || pk_X || XWingLabel)

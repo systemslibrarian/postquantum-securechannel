@@ -98,6 +98,7 @@ PqSession :: byte[] Encrypt(ReadOnlySpan<byte> plaintext, ReadOnlySpan<byte> ass
 PqSession :: byte[] ExportResumptionSecret()
 PqSession :: byte[] UpdateSendKey()
 PqSession :: field const int MaxRecordPlaintextSize
+PqSession :: field const int RecordOverhead
 PqSession :: field const ulong MaxBytesPerEpoch
 PqSession :: field const ulong MaxRecordsPerEpoch
 PqSession :: uint ReceiveEpoch { get; }
