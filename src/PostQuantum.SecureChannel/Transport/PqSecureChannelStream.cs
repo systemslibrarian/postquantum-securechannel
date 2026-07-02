@@ -58,6 +58,14 @@ public sealed class PqSecureChannelStream : Stream
     /// Ratchets the send key and notifies the peer with a key-update record. Subsequent writes use the
     /// new epoch's keys.
     /// </summary>
+    /// <remarks>
+    /// The send direction ratchets in memory before the key-update record is flushed, so if this call is
+    /// cancelled or the underlying write fails, the local and remote epochs can diverge. As with any
+    /// failed write on this stream, a cancelled or faulted <see cref="UpdateSendKeyAsync"/> (or
+    /// <see cref="WriteAsync(ReadOnlyMemory{byte},CancellationToken)"/>, which auto-rekeys) leaves the
+    /// session in an indeterminate state: dispose the stream and re-handshake rather than continuing to
+    /// use it.
+    /// </remarks>
     public async ValueTask UpdateSendKeyAsync(CancellationToken cancellationToken = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);

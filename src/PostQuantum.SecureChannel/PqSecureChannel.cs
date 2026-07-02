@@ -121,6 +121,11 @@ public sealed class PqClientHandshake : IDisposable
             throw new PqProtocolException("Malformed ServerHello.", ex);
         }
 
+        // Declared outside the try so the finally can zero/dispose them even if any step below throws
+        // (e.g. signing, serialization, or session construction) — otherwise the shared secret and the
+        // key-schedule secrets would linger un-zeroed on the exception path.
+        byte[]? sharedSecret = null;
+        KeySchedule? schedule = null;
         try
         {
             // The server must have chosen a version we offered and still support.
@@ -142,10 +147,9 @@ public sealed class PqClientHandshake : IDisposable
             }
 
             // Recover the shared secret and derive the session keys (mixing the resumption secret if present).
-            var sharedSecret = _keyPair.Decapsulate(sh.KemCiphertext);
-            var schedule = KeySchedule.Derive(
+            sharedSecret = _keyPair.Decapsulate(sh.KemCiphertext);
+            schedule = KeySchedule.Derive(
                 sharedSecret, _clientRandom, sh.ServerRandom, h1, _options.ResumptionSecret);
-            CryptographicOperations.ZeroMemory(sharedSecret);
 
             var h2 = Transcript.Hash(_clientHelloBytes, sh.Serialize());
             var finishedMac = Transcript.FinishedMac(schedule.ClientFinishedKey, h2);
@@ -173,7 +177,6 @@ public sealed class PqClientHandshake : IDisposable
             _completed = true;
 
             var session = new PqSession(PqRole.Client, schedule, pinned, _options.SessionOptions);
-            schedule.Dispose(); // session has its own clones of the secrets it needs
             PqDiagnostics.HandshakeCompleted(PqRole.Client, _options.ResumptionSecret is { Length: > 0 }, mutual);
             _activity?.SetTag("pqsc.mutual", mutual);
             _activity?.SetTag("pqsc.resumed", _options.ResumptionSecret is { Length: > 0 });
@@ -192,6 +195,17 @@ public sealed class PqClientHandshake : IDisposable
             PqDiagnostics.HandshakeFailed(PqRole.Client, "unexpected-error");
             _activity?.SetStatus(System.Diagnostics.ActivityStatusCode.Error, ex.Message);
             throw new PqProtocolException("Unexpected error while processing ServerHello.", ex);
+        }
+        finally
+        {
+            // On success the session already holds its own clones of the secrets it needs; on failure
+            // these are the only references. Either way, zero the shared secret and dispose the schedule.
+            if (sharedSecret is not null)
+            {
+                CryptographicOperations.ZeroMemory(sharedSecret);
+            }
+
+            schedule?.Dispose();
         }
     }
 

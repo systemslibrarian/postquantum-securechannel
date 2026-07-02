@@ -6,26 +6,36 @@ using Xunit;
 namespace PostQuantum.SecureChannel.Tests;
 
 /// <summary>
-/// The property-based no-nonce-reuse sweep called out as missing in
-/// <c>docs/AUDIT-SCOPE.md §5</c>. Nonce reuse under a single AES-256-GCM key is the one
-/// catastrophic failure mode of this record layer, and it is exactly the kind of bug that every
-/// round-trip test in the repo would pass while still being present. These tests enumerate the
-/// record-layer nonce as a pure function of <c>(ivPrefix, sequence)</c> across a large sequence
-/// window and across many key-update epochs, and assert that no 96-bit nonce ever repeats.
+/// The property-based no-nonce-reuse checks called out as missing in <c>docs/AUDIT-SCOPE.md §5</c>.
+/// Nonce reuse <em>under a single AES-256-GCM key</em> is the one catastrophic failure mode of this
+/// record layer. That reduces to two independent, checkable invariants:
+///
+/// <list type="number">
+///   <item><b>Within an epoch</b>, the nonce is <c>ivPrefix(4) ‖ sequence(8, big-endian)</c> with a
+///   fixed prefix and a strictly increasing counter capped below
+///   <see cref="PqSession.MaxRecordsPerEpoch"/> (<c>2^32</c>), so no nonce repeats under the epoch's
+///   key. <see cref="NoNonceReuse_WithinEpoch_AcrossSequenceWindow"/> asserts this directly by
+///   sweeping a wide window at both ends of the <c>[0, 2^32)</c> sequence space.</item>
+///   <item><b>Across epochs</b>, a key update ratchets to a fresh 256-bit traffic secret, from which a
+///   new AES key <em>and</em> IV prefix are derived. So even if two epochs produced the same 96-bit
+///   nonce, it would be under a different key — no <c>(key, nonce)</c> pair repeats.
+///   <see cref="EveryEpoch_DerivesDistinctKeyingMaterial"/> asserts the load-bearing half of this: the
+///   per-epoch traffic secret is distinct.</item>
+/// </list>
 ///
 /// <para>
-/// The nonce is <c>ivPrefix(4) ‖ sequence(8, big-endian)</c> (see <see cref="PqSession"/>). Within an
-/// epoch the sequence is a strictly increasing counter capped below
-/// <see cref="PqSession.MaxRecordsPerEpoch"/> (<c>2^32</c>), so intra-epoch uniqueness reduces to
-/// counter monotonicity. Across epochs the sequence resets to 0, so the <em>only</em> thing standing
-/// between the protocol and a reused nonce is that each epoch derives a fresh <c>ivPrefix</c>. Both
-/// halves are asserted here directly.
+/// Note deliberately <em>not</em> asserted: that the 96-bit nonce itself is globally unique across
+/// epochs. The IV prefix is only 32 bits, so across many epochs a prefix (hence nonce) collision is
+/// possible with negligible-but-nonzero probability — and it is <em>harmless</em>, because the key
+/// differs. Asserting global nonce uniqueness would be both a birthday-flaky test and a check of the
+/// wrong property; the two invariants above are the correct, deterministic ones.
 /// </para>
 ///
 /// <para>
-/// The per-epoch <c>ivPrefix</c> is internal, so it is read by reflection rather than reconstructed —
-/// this lets the sweep model the full <c>[0, 2^32)</c> sequence space (including the values right at
-/// the epoch cap) without actually encrypting billions of records.
+/// The internal per-epoch keying state is read by reflection so the sweep can model the full
+/// <c>[0, 2^32)</c> sequence space (including values right at the epoch cap) without encrypting
+/// billions of records. <see cref="SameSequence_DifferentEpoch_ProducesDifferentWireBytes"/> pins the
+/// reflection to real wire output so it cannot silently read a stale field.
 /// </para>
 /// </summary>
 public class NonceUniquenessTests
@@ -44,18 +54,26 @@ public class NonceUniquenessTests
         return (result.Session, serverSession);
     }
 
+    private static object SendDirectionState(PqSession session) =>
+        typeof(PqSession).GetField("_send", BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(session)!;
+
+    private static byte[] ReadPrivateField(object instance, string name) =>
+        (byte[])instance.GetType()
+            .GetField(name, BindingFlags.NonPublic | BindingFlags.Instance)!
+            .GetValue(instance)!;
+
     /// <summary>Reads the send direction's current per-epoch 4-byte IV prefix via reflection.</summary>
     private static byte[] SendIvPrefix(PqSession session)
     {
-        var directionState = typeof(PqSession)
-            .GetField("_send", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(session)!;
-        var ivPrefix = (byte[])directionState.GetType()
-            .GetField("_ivPrefix", BindingFlags.NonPublic | BindingFlags.Instance)!
-            .GetValue(directionState)!;
+        var ivPrefix = ReadPrivateField(SendDirectionState(session), "_ivPrefix");
         Assert.Equal(IvPrefixSize, ivPrefix.Length);
         return (byte[])ivPrefix.Clone();
     }
+
+    /// <summary>Reads the send direction's current per-epoch 32-byte traffic secret via reflection.</summary>
+    private static byte[] SendTrafficSecret(PqSession session) =>
+        (byte[])ReadPrivateField(SendDirectionState(session), "_trafficSecret").Clone();
 
     private static string Nonce(byte[] ivPrefix, ulong sequence)
     {
@@ -66,78 +84,75 @@ public class NonceUniquenessTests
     }
 
     /// <summary>
-    /// The full property: across many epochs, sweeping a wide window of sequence numbers at each end of
-    /// the <c>[0, 2^32)</c> range plus the boundary values adjacent to the epoch cap, no 96-bit nonce is
-    /// ever produced twice. This is the literal sweep <c>AUDIT-SCOPE §5</c> asks for.
+    /// Invariant 1: within any epoch, no 96-bit nonce is produced twice across the sequence window the
+    /// protocol can actually traverse — including the values right up against the <c>2^32</c> cap. Run
+    /// this over several real key-update epochs so the fixed prefix under test is a genuine per-epoch
+    /// prefix, not a fabricated one.
     /// </summary>
     [Fact]
-    public void NoNonceReuse_AcrossSequenceWindow_AndKeyUpdates()
+    public void NoNonceReuse_WithinEpoch_AcrossSequenceWindow()
     {
         const int epochs = 24;
-        const ulong window = 40_000; // records per epoch sampled at each boundary of the sequence space
+        const ulong window = 40_000; // sequences sampled at each end of the space, per epoch
 
         var (client, server) = Establish();
-
-        // Every nonce ever emitted, hex-encoded. Add() returns false on the first duplicate — which
-        // for AES-GCM would be game over. The sweep is sized so a prefix collision (the only way a
-        // duplicate can arise, since intra-epoch sequences never repeat) would be caught immediately.
-        var seen = new HashSet<string>();
 
         for (int epoch = 0; epoch < epochs; epoch++)
         {
             byte[] ivPrefix = SendIvPrefix(client);
+            var seen = new HashSet<string>();
 
-            // Low end of the sequence space (the sequences a real session actually reaches).
+            // Low end: the sequences a real session actually reaches first.
             for (ulong seq = 0; seq < window; seq++)
             {
                 Assert.True(seen.Add(Nonce(ivPrefix, seq)),
-                    $"nonce reuse at epoch {epoch}, sequence {seq}");
+                    $"nonce reuse within epoch {epoch} at sequence {seq}");
             }
 
-            // High end, right up against the epoch cap enforced by PqEpochExhaustedException.
+            // High end: right up against the epoch cap enforced by PqEpochExhaustedException.
             for (ulong seq = MaxSeq - window; seq < MaxSeq; seq++)
             {
                 Assert.True(seen.Add(Nonce(ivPrefix, seq)),
-                    $"nonce reuse at epoch {epoch}, sequence {seq}");
+                    $"nonce reuse within epoch {epoch} at sequence {seq}");
             }
 
-            // Advance the real hash-chained key schedule to the next epoch so the next iteration reads
-            // the genuine next ivPrefix, not a fabricated one.
+            Assert.Equal((int)(window * 2), seen.Count);
+
+            // Advance the real hash-chained key schedule to the next epoch.
             var keyUpdate = client.UpdateSendKey();
             server.Open(keyUpdate);
         }
-
-        Assert.Equal((long)(epochs * window * 2), seen.Count);
     }
 
     /// <summary>
-    /// The load-bearing sub-property: because sequences reset to 0 every epoch, cross-epoch nonce
-    /// uniqueness depends <em>entirely</em> on every epoch deriving a distinct IV prefix. Ratchet many
-    /// times and assert all prefixes are unique.
+    /// Invariant 2 (load-bearing half): every epoch ratchets to a distinct 256-bit traffic secret, from
+    /// which a distinct AES key and IV prefix are derived. This is what makes a repeated nonce across
+    /// epochs harmless — the key is never the same twice. A 256-bit secret makes collision negligible,
+    /// so unlike the 32-bit IV prefix this can be asserted as an absolute over many epochs.
     /// </summary>
     [Fact]
-    public void EveryEpoch_DerivesDistinctIvPrefix()
+    public void EveryEpoch_DerivesDistinctKeyingMaterial()
     {
         const int epochs = 256;
         var (client, server) = Establish();
-        var prefixes = new HashSet<string>();
+        var secrets = new HashSet<string>();
 
         for (int epoch = 0; epoch < epochs; epoch++)
         {
-            Assert.True(prefixes.Add(Convert.ToHexString(SendIvPrefix(client))),
-                $"IV prefix collided at epoch {epoch}; sequence-0 nonces of two epochs would match");
+            Assert.True(secrets.Add(Convert.ToHexString(SendTrafficSecret(client))),
+                $"traffic secret repeated at epoch {epoch}; the epoch's AES key would be reused");
             var keyUpdate = client.UpdateSendKey();
             server.Open(keyUpdate);
         }
 
-        Assert.Equal(epochs, prefixes.Count);
+        Assert.Equal(epochs, secrets.Count);
     }
 
     /// <summary>
-    /// End-to-end sanity that the reflected prefix matches the wire: two records at the same sequence
-    /// but in different epochs carry the same header sequence bytes yet must differ in ciphertext,
-    /// because their nonces (and keys) differ. Guards against the reflection above reading a stale or
-    /// wrong field if the internals are refactored.
+    /// Pins the reflected keying state to real wire output: two records at the same sequence but in
+    /// different epochs carry identical header sequence bytes yet must differ in ciphertext, because the
+    /// key (and nonce prefix) differ. Guards against the reflection above reading a stale or wrong field
+    /// if the internals are refactored.
     /// </summary>
     [Fact]
     public void SameSequence_DifferentEpoch_ProducesDifferentWireBytes()

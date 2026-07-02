@@ -26,6 +26,26 @@ not a change to it.
   injective encoding of the ordered fragment *list*, not just its concatenation. Closes the
   transcript-equivalence item flagged in `docs/AUDIT-SCOPE.md` §3.
 
+### Hardening (from an internal pre-1.0 review; none are wire-format changes)
+
+- **AspNetCore: bounded inbound WebSocket reassembly.** `PqWebSocketStream` now caps the size of a
+  single reassembled inbound message (`DefaultMaxReceiveMessageSize`, 16 MiB + slack, configurable),
+  closing a pre-handshake DoS where a peer could stream one huge/unterminated message and force
+  unbounded buffering *below* the framing layer's size guard.
+- **Handshake key material is zeroed on failure paths.** `ConnectAsync`/`AcceptAsync` now dispose the
+  handshake (`using`) so the ephemeral X-Wing private key and partial key schedule are zeroed on
+  timeout/cancellation/error, not just on success. The client handshake additionally zeroes the shared
+  secret and disposes the key schedule in a `finally`, closing an exception-path leak.
+- **`maxFrameSize` is validated.** `ConnectAsync`/`AcceptAsync` reject a non-positive `maxFrameSize`
+  (previously a negative value cast to a huge `uint` bound, disabling the allocation guard).
+- **Test correctness:** the epoch-keying nonce test now asserts the deterministic, load-bearing
+  invariants (intra-epoch nonce uniqueness across the sequence window + distinct 256-bit per-epoch
+  traffic secret) instead of a birthday-flaky 32-bit IV-prefix distinctness claim.
+- Newly documented limitations in `KNOWN-GAPS.md`: cancelled/failed writes leave the session
+  indeterminate (§6), truncation is not distinguished from a clean close (§6), client identity is not
+  confidential on the wire (§7), and transient KEM/signature intermediates are not individually zeroed
+  (§8).
+
 ### Changed
 
 - `PqProtocol.Version` remains `2`. API surface is now frozen under SemVer.

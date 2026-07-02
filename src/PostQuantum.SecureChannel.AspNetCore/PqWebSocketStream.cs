@@ -15,8 +15,16 @@ namespace PostQuantum.SecureChannel.AspNetCore;
 /// </remarks>
 public sealed class PqWebSocketStream : Stream
 {
+    /// <summary>
+    /// Default maximum size, in bytes, of a single reassembled inbound WebSocket message (16 MiB plus a
+    /// small framing allowance). A message carries exactly one length-prefixed channel frame, so this
+    /// bounds inbound buffering to roughly the channel's own frame limit.
+    /// </summary>
+    public const int DefaultMaxReceiveMessageSize = (16 * 1024 * 1024) + 4096;
+
     private readonly WebSocket _socket;
     private readonly bool _ownsSocket;
+    private readonly int _maxReceiveMessageSize;
     private byte[]? _readBuffer;
     private int _readOffset;
     private bool _disposed;
@@ -24,11 +32,18 @@ public sealed class PqWebSocketStream : Stream
     /// <summary>Initializes a new instance wrapping <paramref name="socket"/>.</summary>
     /// <param name="socket">The connected WebSocket to wrap.</param>
     /// <param name="ownsSocket">If <see langword="true"/>, disposing this stream also disposes the socket.</param>
-    public PqWebSocketStream(WebSocket socket, bool ownsSocket = true)
+    /// <param name="maxReceiveMessageSize">
+    /// Maximum size, in bytes, of a single reassembled inbound WebSocket message. A peer that sends a
+    /// larger (or unterminated) message is rejected before the whole message is buffered, bounding
+    /// memory use even before the handshake completes. Defaults to <see cref="DefaultMaxReceiveMessageSize"/>.
+    /// </param>
+    public PqWebSocketStream(WebSocket socket, bool ownsSocket = true, int maxReceiveMessageSize = DefaultMaxReceiveMessageSize)
     {
         ArgumentNullException.ThrowIfNull(socket);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxReceiveMessageSize);
         _socket = socket;
         _ownsSocket = ownsSocket;
+        _maxReceiveMessageSize = maxReceiveMessageSize;
     }
 
     /// <inheritdoc />
@@ -85,7 +100,9 @@ public sealed class PqWebSocketStream : Stream
             return toCopy;
         }
 
-        // Receive a fresh WebSocket message, concatenating fragments.
+        // Receive a fresh WebSocket message, concatenating fragments. Bound the total so a malicious or
+        // buggy peer cannot force unbounded buffering (a pre-handshake OOM) with one huge or unterminated
+        // message — the size guard in the framing layer sits above this adapter and would never see it.
         using var ms = new MemoryStream();
         var chunk = new byte[8192];
         while (true)
@@ -103,6 +120,12 @@ public sealed class PqWebSocketStream : Stream
             if (result.MessageType == WebSocketMessageType.Close)
             {
                 return 0;
+            }
+
+            if (ms.Length + result.Count > _maxReceiveMessageSize)
+            {
+                throw new PostQuantum.SecureChannel.PqProtocolException(
+                    $"Inbound WebSocket message exceeds the {_maxReceiveMessageSize}-byte limit.");
             }
 
             ms.Write(chunk, 0, result.Count);

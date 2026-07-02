@@ -23,9 +23,13 @@ public static partial class PqSecureChannel
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxFrameSize);
         return WithTimeout(handshakeTimeout, async token =>
         {
-            var handshake = CreateClient(options);
+            // Dispose the handshake on every path: on failure/timeout/cancellation this zeroes the
+            // ephemeral X-Wing private key and partial key schedule. On success it is a no-op for the
+            // session, which holds its own clones of the secrets it needs.
+            using var handshake = CreateClient(options);
 
             var clientHello = handshake.CreateClientHello();
             await PqFraming.WriteFrameAsync(stream, clientHello, token).ConfigureAwait(false);
@@ -57,9 +61,13 @@ public static partial class PqSecureChannel
         CancellationToken cancellationToken = default)
     {
         ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maxFrameSize);
         return WithTimeout(handshakeTimeout, async token =>
         {
-            var handshake = CreateServer(options);
+            // Dispose the handshake on every path: on failure/timeout/cancellation this zeroes the
+            // server's partial key schedule and ephemeral material. On success it is a no-op for the
+            // session, which holds its own clones of the secrets it needs.
+            using var handshake = CreateServer(options);
 
             var clientHello = await PqFraming.ReadFrameAsync(stream, maxFrameSize, token).ConfigureAwait(false);
             var serverHello = handshake.ProcessClientHello(clientHello);

@@ -102,6 +102,24 @@ writes); **post-handshake** read/write timeouts are still your responsibility (p
 size is bounded (16 MiB default) but there is no other DoS mitigation. You remain responsible for
 connection lifecycle, timeouts, and back-pressure.
 
+Two specific behaviors to design around:
+
+- **A cancelled/failed write leaves the session indeterminate.** Writes are not transactional with the
+  wire. In particular an in-band key update ratchets the send epoch in memory *before* the key-update
+  record is flushed, so a cancelled or faulted `UpdateSendKeyAsync` / `WriteAsync` can desynchronize
+  the local and remote epochs. Treat any write failure as fatal to the session: dispose the stream and
+  re-handshake, do not retry on the same session.
+- **Truncation is not distinguished from a clean close.** There is no authenticated end-of-stream
+  marker (no TLS `close_notify` equivalent). A read that hits EOF at a frame boundary and a connection
+  an attacker cut mid-stream both surface as a normal end-of-stream (`ReadAsync` returns `0`). AES-GCM
+  still prevents forging or tampering with any *delivered* record; this is a truncation-detection gap,
+  not a confidentiality/integrity break. If your application needs to detect truncation, carry an
+  explicit length or end-of-message marker in your own payload framing.
+
+The AspNetCore WebSocket adapter (`PqWebSocketStream`) caps the size of a single reassembled inbound
+message (`DefaultMaxReceiveMessageSize`, 16 MiB + slack) so a peer cannot force unbounded buffering
+before the handshake completes; tune it via the constructor if your payloads are larger.
+
 ## 7. Identity trust is your responsibility (no PKI)
 
 Authentication is via **raw-key pinning**: the client must obtain and pin the server's
@@ -111,6 +129,13 @@ As of 0.2.1, clients can pin multiple server identities at once via
 chain, no CA, no revocation, and no expiry**. If a private identity seed is compromised, you must
 rotate it and redistribute the public key yourself.
 
+**Client identity is not confidential on the wire.** For a mutually-authenticated handshake the
+client's `PqIdentityPublicKey` and signature travel in `ClientFinished` outside any handshake
+encryption, so a passive eavesdropper can observe *which* pinned client is connecting (unlike TLS 1.3,
+which encrypts the client certificate). This is a metadata/privacy property, not an authentication
+weakness — the signature still binds the full transcript and cannot be replayed into another session.
+If client-identity privacy matters, run the channel inside an outer encrypted transport (e.g. TLS).
+
 ## 8. Side-channel resistance is inherited, not independently verified
 
 Constant-time comparisons are used for authentication tags and pinned-key checks
@@ -118,6 +143,14 @@ Constant-time comparisons are used for authentication tags and pinned-key checks
 overall timing/cache/power side-channel resistance is only as good as the underlying BouncyCastle and
 .NET implementations, and this has **not** been independently measured for this library. Managed .NET
 also cannot guarantee secret data is never copied by the GC.
+
+**Zeroization covers long-lived key material, not every transient.** Session traffic secrets, the key
+schedule, identity seeds, and the X-Wing/handshake ephemeral keys are zeroed on `Dispose` (including
+on handshake failure paths). But short-lived *derived intermediates* inside the KEM and signature
+routines — e.g. the expanded ML-KEM/X25519 private key, the per-encapsulation KEM shared-secret halves,
+and the `byte[]` seed copies handed to BouncyCastle — are left for the GC to reclaim rather than being
+individually zeroed, partly because BouncyCastle's own key objects are not zeroable. In managed memory
+this is a best-effort boundary, not a guarantee that no secret byte outlives its use.
 
 ## 9. Not constant-time against malformed input in every path
 
