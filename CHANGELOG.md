@@ -35,10 +35,15 @@ not a change to it.
 - **Symbolic protocol model** (`formal/xwing-handshake.pv`, ProVerif) covering session confidentiality
   and transcript agreement, wired into CI as an **advisory (non-blocking)** job. Authored as a
   reviewable specification; **not yet a confirmed proof** — see `formal/README.md`.
-- **Live ML-KEM-768 interop harness** (`MlKemInteropTests`) cross-checking BouncyCastle against .NET's
-  independent built-in `System.Security.Cryptography.MLKem` — key generation and both encapsulation
-  directions must agree (net10+, where the platform provides ML-KEM). A stronger interop check than a
-  static KAT vector.
+- **Live PQC interop harnesses** (`MlKemInteropTests`, `MlDsaInteropTests`) cross-checking BouncyCastle
+  against .NET's independent built-in `MLKem` / `MLDsa` — key generation plus both encapsulation and
+  both signing directions must agree (net10+, where the platform provides them). Stronger interop
+  checks than static KAT vectors.
+- **Code coverage in CI** via `coverlet.collector` and a dedicated `coverage` job (core library line
+  coverage ~89%).
+- `EpochLimitTests.OversizedPlaintext_IsRejected` hardened: it now allocates an *uninitialized* >1 GiB
+  buffer and skips (rather than failing) on memory-constrained hosts, while still exercising the guard
+  wherever the memory is available.
 - **`ROADMAP.md`** — an honest public plan, including that an independent audit is currently blocked on
   funding.
 

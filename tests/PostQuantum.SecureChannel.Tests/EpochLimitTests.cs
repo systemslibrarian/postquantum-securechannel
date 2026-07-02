@@ -38,11 +38,25 @@ public class EpochLimitTests
         Assert.Equal(1UL << 36, PqSession.MaxBytesPerEpoch);
     }
 
-    [Fact]
+    [SkippableFact]
     public void OversizedPlaintext_IsRejected()
     {
         var (client, _) = Establish(PqSessionOptions.Default);
-        var oversized = new byte[PqSession.MaxRecordPlaintextSize + 1];
+
+        // The guard only reads plaintext.Length, so use an *uninitialized* >1 GiB buffer (no zeroing).
+        // On a memory-constrained host the allocation itself may fail; that is not a product defect, so
+        // skip rather than fail — the guard is still exercised wherever the memory is available (incl. CI).
+        byte[] oversized;
+        try
+        {
+            oversized = GC.AllocateUninitializedArray<byte>(PqSession.MaxRecordPlaintextSize + 1);
+        }
+        catch (OutOfMemoryException)
+        {
+            Skip.If(true, "Host cannot allocate a >1 GiB buffer to exercise the oversized-plaintext guard.");
+            return;
+        }
+
         Assert.Throws<ArgumentOutOfRangeException>(() => client.Encrypt(oversized));
     }
 

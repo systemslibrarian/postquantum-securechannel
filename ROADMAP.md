@@ -97,14 +97,15 @@ These are what would turn "carefully engineered" into "independently assured." T
     future 1.x releases. Requires a published `1.0.0` to baseline against, so it lands **after** the
     first public release; the in-repo public-API freeze test guards the surface until then.
 
-14. **Live interop harness.** *(started)* `MlKemInteropTests` cross-checks ML-KEM-768 between
-    BouncyCastle (what this library uses) and .NET's built-in `System.Security.Cryptography.MLKem` — an
-    independent implementation — for key generation and both encapsulation directions (net10+, where
-    the platform supports it). Remaining: an ML-DSA-65 cross-check and, ideally, a second full X-Wing
-    implementation (`AUDIT-SCOPE.md` §11).
+14. **Live interop harness.** *(largely done)* `MlKemInteropTests` and `MlDsaInteropTests` cross-check
+    ML-KEM-768 and ML-DSA-65 between BouncyCastle (what this library uses) and .NET's independent
+    built-in `MLKem`/`MLDsa` — key generation and both encapsulation / both signing directions must
+    agree (net10+, where the platform supports it). Remaining: ideally a second full *X-Wing*
+    implementation (combiner included) in the loop (`AUDIT-SCOPE.md` §11).
 
-15. **Coverage & perf-regression gates.** Coverage measurement in CI and tracked benchmarks so
-    performance regressions fail the build.
+15. **Coverage & perf-regression gates.** *(coverage done)* CI collects code coverage
+    (`coverlet.collector`; a dedicated `coverage` job uploads a Cobertura report — core library line
+    coverage is ~89%). Remaining: tracked benchmarks so performance regressions fail the build.
 
 ---
 
