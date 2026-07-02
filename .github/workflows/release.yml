@@ -81,7 +81,7 @@ jobs:
           dotnet-CycloneDX PostQuantum.SecureChannel.slnx -o ./artifacts -F Json -fn sbom.cyclonedx.json -t
 
       - name: Attest build provenance for packages
-        uses: actions/attest-build-provenance@v1
+        uses: actions/attest-build-provenance@v4
         with:
           subject-path: './artifacts/*.nupkg'
 
