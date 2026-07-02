@@ -172,11 +172,14 @@ is a purpose-built channel.
 
 The suite covers all three X-Wing Known-Answer Test vectors (wire-compatibility with any conformant
 implementation), primitive round-trips, every handshake variant, session failure modes, key update,
-anti-replay (both modes), resumption, version negotiation, the TCP stream adapter, and randomized
-parser/record **fuzzing** that asserts only well-typed exceptions ever escape. It does **not** yet
-include a formal property-based testing framework, exhaustive malformed-message enumeration, coverage
-measurement, or a live interop harness running a *different* implementation in the same test run (the
-KAT vectors are the interop check today).
+anti-replay (both modes), resumption, version negotiation, the TCP stream adapter, randomized
+parser/record **fuzzing** that asserts only well-typed exceptions ever escape, **property-based tests**
+(record round-trips, an anti-replay window checked against a reference model, framing), and a **live
+interop cross-check** of ML-KEM-768 between BouncyCastle and .NET's independent built-in `MLKem`
+(`MlKemInteropTests`, on platforms where it is supported). It does **not** yet include exhaustive
+malformed-message enumeration, coverage measurement, an ML-DSA-65 interop cross-check, or a second full
+X-Wing implementation in the loop. A symbolic protocol model exists (`formal/`) and runs in CI as an
+advisory job, but is not yet a confirmed proof.
 
 ## 12. Quantum authentication caveat
 

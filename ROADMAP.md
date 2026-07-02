@@ -41,9 +41,11 @@ These are what would turn "carefully engineered" into "independently assured." T
 3. **Formal protocol model (ProVerif / Tamarin).** *(in progress — see [`formal/`](formal/))*
    A mechanized model of the handshake checking secrecy, mutual authentication, and absence of
    signature/transcript reflection. This is the closest thing to an audit that can be produced without
-   hiring one, and it is fully within reach. The model in `formal/` is authored but **not yet
-   machine-checked in CI** (the ProVerif toolchain is not yet wired into the build); treat it as a
-   precise specification pending a verified run.
+   hiring one, and it is fully within reach. The model in `formal/` is authored and **wired into CI as
+   an advisory (non-blocking) job** that installs ProVerif and runs it on every push
+   (`.github/workflows/ci.yml`). It stays advisory — and is not cited as a proof — until a verified pass
+   is confirmed and reviewed, at which point the job becomes blocking. Mutual-auth (Q3) and a
+   forward-secrecy phase are the next additions to the model.
 
 ## Tier 2 — correctness & robustness hardening
 
@@ -95,8 +97,11 @@ These are what would turn "carefully engineered" into "independently assured." T
     future 1.x releases. Requires a published `1.0.0` to baseline against, so it lands **after** the
     first public release; the in-repo public-API freeze test guards the surface until then.
 
-14. **Live interop harness.** Run a *different* X-Wing / ML-KEM / ML-DSA implementation in the same
-    test run, beyond today's KAT-vector cross-check (`AUDIT-SCOPE.md` §11).
+14. **Live interop harness.** *(started)* `MlKemInteropTests` cross-checks ML-KEM-768 between
+    BouncyCastle (what this library uses) and .NET's built-in `System.Security.Cryptography.MLKem` — an
+    independent implementation — for key generation and both encapsulation directions (net10+, where
+    the platform supports it). Remaining: an ML-DSA-65 cross-check and, ideally, a second full X-Wing
+    implementation (`AUDIT-SCOPE.md` §11).
 
 15. **Coverage & perf-regression gates.** Coverage measurement in CI and tracked benchmarks so
     performance regressions fail the build.

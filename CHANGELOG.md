@@ -33,8 +33,12 @@ not a change to it.
   checked against a reference model over tens of thousands of steps, and framing round-trip/rejection
   properties (`docs/AUDIT-SCOPE.md` §11).
 - **Symbolic protocol model** (`formal/xwing-handshake.pv`, ProVerif) covering session confidentiality
-  and transcript agreement. Authored as a reviewable specification; **not yet machine-checked** — see
-  `formal/README.md`.
+  and transcript agreement, wired into CI as an **advisory (non-blocking)** job. Authored as a
+  reviewable specification; **not yet a confirmed proof** — see `formal/README.md`.
+- **Live ML-KEM-768 interop harness** (`MlKemInteropTests`) cross-checking BouncyCastle against .NET's
+  independent built-in `System.Security.Cryptography.MLKem` — key generation and both encapsulation
+  directions must agree (net10+, where the platform provides ML-KEM). A stronger interop check than a
+  static KAT vector.
 - **`ROADMAP.md`** — an honest public plan, including that an independent audit is currently blocked on
   funding.
 

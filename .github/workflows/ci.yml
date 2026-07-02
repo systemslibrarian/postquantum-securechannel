@@ -77,3 +77,25 @@ jobs:
         with:
           name: nupkg
           path: ./artifacts/*.nupkg
+
+  formal-model:
+    name: Formal model (ProVerif, advisory)
+    runs-on: ubuntu-latest
+    # Advisory until the model is confirmed: this surfaces the real ProVerif result on every push
+    # without blocking the build on a model that is not yet verified (see formal/README.md).
+    continue-on-error: true
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install ProVerif
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y opam
+          opam init --disable-sandboxing --yes
+          opam install --yes proverif
+
+      - name: Verify the handshake model
+        run: |
+          eval "$(opam env)"
+          proverif formal/xwing-handshake.pv
