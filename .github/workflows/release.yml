@@ -16,11 +16,20 @@ on:
   push:
     tags: [ 'v*' ]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing tag to attach the GitHub release to (e.g. v1.0.0). The package version comes from the .csproj regardless.'
+        required: false
+        default: ''
 
 permissions:
   contents: write      # create the GitHub release and upload assets
   id-token: write      # OIDC token for NuGet Trusted Publishing + attestations
   attestations: write  # build-provenance attestations for the packages
+
+env:
+  # On a tag push this is the pushed tag; on manual dispatch it is the optional `tag` input.
+  RELEASE_TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
 jobs:
   release:
@@ -69,7 +78,7 @@ jobs:
         run: |
           dotnet tool install --global CycloneDX
           export PATH="$PATH:$HOME/.dotnet/tools"
-          dotnet CycloneDX PostQuantum.SecureChannel.slnx -o ./artifacts -f sbom.cyclonedx.json
+          dotnet-CycloneDX PostQuantum.SecureChannel.slnx -o ./artifacts -F Json -fn sbom.cyclonedx.json -t
 
       - name: Attest build provenance for packages
         uses: actions/attest-build-provenance@v1
@@ -77,8 +86,10 @@ jobs:
           subject-path: './artifacts/*.nupkg'
 
       - name: Create GitHub release
+        if: ${{ env.RELEASE_TAG != '' && startsWith(env.RELEASE_TAG, 'v') }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
           files: |
             ./artifacts/*.nupkg
