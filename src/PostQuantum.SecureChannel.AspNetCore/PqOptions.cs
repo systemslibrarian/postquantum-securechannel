@@ -32,6 +32,24 @@ public sealed class PqSecureChannelOptions
     /// <summary>Reject handshakes that do not present a client identity. Defaults to <see langword="false"/>.</summary>
     public bool RequireClientAuthentication { get; set; }
 
+    /// <summary>
+    /// An allowlist of base64-encoded client public keys permitted to connect. When non-empty, only a
+    /// client presenting one of these identities is accepted; an anonymous client is rejected even if
+    /// <see cref="RequireClientAuthentication"/> is left <see langword="false"/> (a configured allowlist
+    /// implies authentication is required). Distribute the keys out of band; a client is compared by its
+    /// full public key in constant time. Leave empty to accept any authenticated client.
+    /// </summary>
+    public IList<string> AuthorizedClientKeysBase64 { get; set; } = new List<string>();
+
+    /// <summary>
+    /// Resolves <see cref="AuthorizedClientKeysBase64"/> into pinned identities, or <see langword="null"/>
+    /// when the allowlist is empty (i.e. any authenticated client is accepted).
+    /// </summary>
+    public IReadOnlyCollection<PqIdentityPublicKey>? ResolveAuthorizedClients()
+        => AuthorizedClientKeysBase64.Count == 0
+            ? null
+            : AuthorizedClientKeysBase64.Select(PqIdentityPublicKey.FromBase64).ToArray();
+
     /// <summary>Handshake timeout for the stream adapter. Defaults to 10 seconds.</summary>
     public TimeSpan HandshakeTimeout { get; set; } = TimeSpan.FromSeconds(10);
 

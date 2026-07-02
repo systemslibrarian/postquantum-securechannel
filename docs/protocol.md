@@ -30,6 +30,11 @@ The X-Wing combiner is validated byte-for-byte against the three Known-Answer Te
 the draft. When that draft is published as an RFC, the pinned reference here will be updated to the RFC
 number and the vectors re-checked.
 
+**Reimplementing this protocol?** The composition surfaces this library owns — the HKDF `info`
+construction, the transcript hash framing, the full key schedule, and the record-layer keying — have
+language-neutral test vectors under [`interop-vectors/`](interop-vectors/). They are generated from the
+implementation and self-verified in CI, so any second implementation can check itself against them.
+
 **Why SHA-256 (not SHA3-256) for the transcript and HKDF.** The protocol-glue layer is uniformly
 SHA-256 (HKDF-SHA256, HMAC-SHA256, transcript SHA-256). SHA-256 is FIPS-approved, hardware-accelerated
 on every modern CPU, and gives 128-bit collision resistance under standard assumptions — sufficient

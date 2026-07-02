@@ -50,6 +50,7 @@ public static class PqEndpointRouteBuilderExtensions
                 {
                     Identity = identity,
                     RequireClientAuthentication = options.RequireClientAuthentication,
+                    AuthorizedClients = options.ResolveAuthorizedClients(),
                     SessionOptions = options.ResolveSessionOptions(),
                 },
                 leaveInnerOpen: true,

@@ -1,0 +1,22 @@
+version: 2
+updates:
+  # Keep the cryptographic dependency (BouncyCastle) and test/build packages current. A stale crypto
+  # dependency is a real risk; surfacing updates as PRs keeps them visible and reviewable.
+  - package-ecosystem: nuget
+    directory: "/"
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 10
+    groups:
+      test-and-build:
+        patterns:
+          - "coverlet.*"
+          - "Microsoft.NET.Test.*"
+          - "xunit*"
+          - "Microsoft.SourceLink.*"
+
+  # Pin and update GitHub Actions themselves — supply-chain hygiene for the CI/release pipeline.
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly

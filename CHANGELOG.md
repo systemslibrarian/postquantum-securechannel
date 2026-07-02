@@ -103,6 +103,25 @@ not a change to it.
   confidential on the wire (§7), and transient KEM/signature intermediates are not individually zeroed
   (§8).
 
+### Ecosystem & interop (additive; no wire-format change)
+
+- **Language-neutral interop vectors** (`docs/interop-vectors/composition-vectors.v2.json`). Pin the four
+  composition surfaces a second implementation in any language must reproduce byte-for-byte — the HKDF
+  `info` construction, the length-prefixed transcript hash, the full key schedule (with/without
+  resumption), and the record-layer key/IV/nonce/ratchet derivation. Generated from the implementation
+  and self-verified in CI (`InteropVectorTests`) so they can never silently diverge from the code.
+- **ASP.NET Core client allowlist.** `PqSecureChannelOptions.AuthorizedClientKeysBase64` lets the
+  WebSocket endpoint (`MapPqWebSocket`) restrict connections to an approved set of client identities —
+  previously the flagship integration could require client auth but not authorize *which* clients. DI
+  identity loaders now zero the intermediate seed byte arrays after import.
+- **Signed, provenanced release pipeline.** `.github/workflows/release.yml` builds and tests on all three
+  TFMs, packs, generates a CycloneDX SBOM, attests build provenance for every `.nupkg` (verifiable with
+  `gh attestation verify`), and publishes to NuGet.org via **Trusted Publishing** (short-lived OIDC token,
+  no stored API key). Dependabot keeps the crypto dependency and CI actions current. See `RELEASING.md`.
+- **New sample: `samples/DeviceEnrollment`.** A first-boot edge-device enrollment lifecycle — identity
+  generation, trust-on-first-use fingerprint approval, allowlist-gated operation, and key rotation with
+  an overlap window.
+
 ### Changed
 
 - `PqProtocol.Version` remains `2`. API surface is now frozen under SemVer.

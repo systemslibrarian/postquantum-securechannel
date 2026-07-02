@@ -4,6 +4,7 @@
   </Folder>
   <Folder Name="/samples/">
     <Project Path="samples/EchoDemo/EchoDemo.csproj" />
+    <Project Path="samples/DeviceEnrollment/DeviceEnrollment.csproj" />
     <Project Path="samples/MicroserviceWebSocket.Server/MicroserviceWebSocket.Server.csproj" />
     <Project Path="samples/MicroserviceWebSocket.Client/MicroserviceWebSocket.Client.csproj" />
     <Project Path="samples/WorkerControlPlane/WorkerControlPlane.csproj" />

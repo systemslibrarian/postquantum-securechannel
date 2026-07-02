@@ -76,4 +76,29 @@ public class OptionsBindingTests
         Assert.NotNull(built.ServerIdentity);
         Assert.Equal(identity.PublicKey.Fingerprint(), built.ServerIdentity!.Fingerprint());
     }
+
+    [Fact]
+    public void ResolveAuthorizedClients_EmptyList_ReturnsNull()
+    {
+        var options = new PqSecureChannelOptions();
+        Assert.Null(options.ResolveAuthorizedClients());
+    }
+
+    [Fact]
+    public void ResolveAuthorizedClients_BindsPinnedClientKeys()
+    {
+        using var clientA = PqIdentity.Create();
+        using var clientB = PqIdentity.Create();
+        var options = new PqSecureChannelOptions
+        {
+            AuthorizedClientKeysBase64 = { clientA.PublicKey.ToBase64(), clientB.PublicKey.ToBase64() },
+        };
+
+        var resolved = options.ResolveAuthorizedClients();
+        Assert.NotNull(resolved);
+        Assert.Equal(2, resolved!.Count);
+        var fingerprints = resolved.Select(k => k.Fingerprint()).ToHashSet();
+        Assert.Contains(clientA.PublicKey.Fingerprint(), fingerprints);
+        Assert.Contains(clientB.PublicKey.Fingerprint(), fingerprints);
+    }
 }

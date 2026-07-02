@@ -1,0 +1,147 @@
+{
+  "description": "Language-neutral interop vectors for PostQuantum.SecureChannel protocol version 2. A conformant implementation in any language MUST reproduce every 'output' below from the given 'input'. Covers the composition surfaces this library owns; the X-Wing KEM is validated separately against the published IETF KAT vectors.",
+  "protocolVersion": 2,
+  "specification": "docs/protocol.md",
+  "primitives": {
+    "kdf": "HKDF-SHA256",
+    "transcriptHash": "SHA-256",
+    "finishedMac": "HMAC-SHA256",
+    "recordAead": "AES-256-GCM (128-bit tag, 96-bit nonce)"
+  },
+  "hkdfInfo": {
+    "construction": "uint16_BE(length) || uint8(label_len) || label_ascii || uint8(context_len) || context",
+    "examples": [
+      {
+        "input": {
+          "label": "pqsc/v2 master",
+          "length": 32,
+          "context": "303132333435363738393a3b3c3d3e3f202122232425262728292a2b2c2d2e2f"
+        },
+        "output": {
+          "info": "00200e707173632f7632206d617374657220303132333435363738393a3b3c3d3e3f202122232425262728292a2b2c2d2e2f"
+        }
+      },
+      {
+        "input": {
+          "label": "pqsc/v2 c2s traffic",
+          "length": 32,
+          "context": ""
+        },
+        "output": {
+          "info": "002013707173632f763220633273207472616666696300"
+        }
+      },
+      {
+        "input": {
+          "label": "pqsc/v2 key",
+          "length": 32,
+          "context": ""
+        },
+        "output": {
+          "info": "00200b707173632f7632206b657900"
+        }
+      }
+    ]
+  },
+  "transcriptHash": {
+    "construction": "SHA-256( for each fragment: uint32_BE(len) || fragment )",
+    "examples": [
+      {
+        "note": "single fragment",
+        "input": {
+          "fragments": [
+            "101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f"
+          ]
+        },
+        "output": {
+          "hash": "8005a8ed62345371274eb13b467e5641547a3701f3e7d2bdd59c2a1092ba9e29"
+        }
+      },
+      {
+        "note": "two fragments",
+        "input": {
+          "fragments": [
+            "101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f",
+            "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f"
+          ]
+        },
+        "output": {
+          "hash": "609ca9d6d26642b77b656047c3261a6cd1e44489c4016ee4ae6850467d6d4213"
+        }
+      },
+      {
+        "note": "empty then nonempty (order/empties are significant)",
+        "input": {
+          "fragments": [
+            "",
+            "101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f"
+          ]
+        },
+        "output": {
+          "hash": "fa3aac10c4f030ee010879b1737d29130e182da7270d425a299469d398a4d45e"
+        }
+      }
+    ]
+  },
+  "keySchedule": {
+    "saltConstruction": "clientRandom || serverRandom || resumptionPsk",
+    "labels": {
+      "master": "pqsc/v2 master",
+      "clientToServerTraffic": "pqsc/v2 c2s traffic",
+      "serverToClientTraffic": "pqsc/v2 s2c traffic",
+      "clientFinished": "pqsc/v2 client finished",
+      "serverFinished": "pqsc/v2 server finished",
+      "resumption": "pqsc/v2 resumption"
+    },
+    "withoutResumption": {
+      "input": {
+        "sharedSecret": "aaaba8a9aeafacada2a3a0a1a6a7a4a5babbb8b9bebfbcbdb2b3b0b1b6b7b4b5",
+        "clientRandom": "101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f",
+        "serverRandom": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "transcriptHash": "303132333435363738393a3b3c3d3e3f202122232425262728292a2b2c2d2e2f",
+        "resumptionPsk": ""
+      },
+      "output": {
+        "clientToServerTrafficSecret": "f2b675eaf19391e2b0f334a480d999ae0acec23ee16c67584d38ee5fa0792d45",
+        "serverToClientTrafficSecret": "95a44abca601e719752a329969cf62dabb28e9d38a733596ff5e6600efc084ad",
+        "clientFinishedKey": "70f62b4df3c03afd92babf48fc5e09dfb1a27dbd071a3fb8cf716c083ec59ef6",
+        "serverFinishedKey": "e7f93e071cf7045e8f444b806b24af169e2a66fc69fcb24b0b77cee48579ca5a",
+        "resumptionSecret": "2fa1d553c6007ab844074963c0b2f7baff2ac23cb43c31a7443e5294e9b831ad"
+      }
+    },
+    "withResumption": {
+      "input": {
+        "sharedSecret": "aaaba8a9aeafacada2a3a0a1a6a7a4a5babbb8b9bebfbcbdb2b3b0b1b6b7b4b5",
+        "clientRandom": "101112131415161718191a1b1c1d1e1f000102030405060708090a0b0c0d0e0f",
+        "serverRandom": "202122232425262728292a2b2c2d2e2f303132333435363738393a3b3c3d3e3f",
+        "transcriptHash": "303132333435363738393a3b3c3d3e3f202122232425262728292a2b2c2d2e2f",
+        "resumptionPsk": "42434041464744454a4b48494e4f4c4d52535051565754555a5b58595e5f5c5d"
+      },
+      "output": {
+        "clientToServerTrafficSecret": "59b36d437c5830f69c6342a176deaf14d0d102f62254d20d6017dff69dcf941f",
+        "serverToClientTrafficSecret": "8939b957974ec7e7aa148c64286b8240d362133d7f18ce0439068bc0a4fa0938",
+        "clientFinishedKey": "c95034f91444e65e65c94a7c93ca835dd832e22cf8f9753cae52ff7e595798b4",
+        "serverFinishedKey": "48c945d7ee3358dac33203ff2dd20498ae3ef0f2b3c31a39128006c326ec6437",
+        "resumptionSecret": "39f8b7464d28a001cc6c5bba9c37f697f3ee0f10dde2f8fbb611daa4727d283c"
+      }
+    }
+  },
+  "recordKeying": {
+    "labels": {
+      "key": "pqsc/v2 key",
+      "iv": "pqsc/v2 iv",
+      "keyUpdate": "pqsc/v2 key update"
+    },
+    "nonceConstruction": "ivPrefix(4 bytes) || uint64_BE(sequence)",
+    "keyUpdateRatchet": "nextTrafficSecret = HKDF-Expand(trafficSecret, \"pqsc/v2 key update\", 32)",
+    "input": {
+      "trafficSecret": "f2b675eaf19391e2b0f334a480d999ae0acec23ee16c67584d38ee5fa0792d45"
+    },
+    "output": {
+      "aesKey": "be90330a582af823b834fbf74fd711e5a8ad97c89e8ee13fb9c1794a71aabb79",
+      "ivPrefix": "d6bd4211",
+      "nonceForSequence5": "d6bd42110000000000000005",
+      "ratchetedTrafficSecret": "4740203b7e33c503014123d9a6f8297963772011597dff407bc96fe55c21a313"
+    }
+  }
+}

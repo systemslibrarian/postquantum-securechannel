@@ -87,6 +87,7 @@ Then explore the more realistic samples:
 | [`samples/MicroserviceWebSocket.*`](samples/MicroserviceWebSocket.Server) | ASP.NET Core ↔ client | DI registration, WebSocket adapter, config-driven identity loading |
 | [`samples/WorkerControlPlane`](samples/WorkerControlPlane) | `BackgroundService` ↔ TCP coordinator | Long-lived connection, auto-rekey, hosted-service pattern |
 | [`samples/QueueEnvelope`](samples/QueueEnvelope) | Producer → broker → consumer | Envelope encryption — the broker never sees plaintext |
+| [`samples/DeviceEnrollment`](samples/DeviceEnrollment) | Edge device ↔ control plane | First-boot identity, fingerprint approval (TOFU), allowlist, key rotation |
 | [`samples/EchoDemo`](samples/EchoDemo) | TCP loopback | Minimal end-to-end demonstration |
 
 ---
@@ -145,6 +146,8 @@ ML-KEM still protects you. You only lose if **both** fall.
 - **[Operations guide](docs/operations.md)** — pinning, rotation, alerts, incident response.
 - **[Troubleshooting](docs/troubleshooting.md)** — every common exception with a recovery path.
 - **[Protocol spec](docs/protocol.md)** — wire format, key schedule, KAT references.
+- **[Interop vectors](docs/interop-vectors/)** — language-neutral vectors for reimplementing the protocol.
+- **[Releasing](RELEASING.md)** — signed, provenanced, SBOM-attached publishing.
 - **[Changelog](CHANGELOG.md)** — full version history.
 
 ### What's new in 1.0.0

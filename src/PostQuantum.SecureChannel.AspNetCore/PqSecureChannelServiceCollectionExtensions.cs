@@ -55,8 +55,7 @@ public static class PqSecureChannelServiceCollectionExtensions
         builder.Services.AddSingleton(_ =>
         {
             var base64 = File.ReadAllText(path).Trim();
-            var seed = Convert.FromBase64String(base64);
-            return PqIdentity.ImportPrivateSeed(seed);
+            return ImportSeedAndZero(base64);
         });
         return builder;
     }
@@ -101,17 +100,35 @@ public static class PqSecureChannelServiceCollectionExtensions
     {
         if (!string.IsNullOrWhiteSpace(options.ServerIdentitySeedBase64))
         {
-            return PqIdentity.ImportPrivateSeed(Convert.FromBase64String(options.ServerIdentitySeedBase64));
+            return ImportSeedAndZero(options.ServerIdentitySeedBase64);
         }
 
         if (!string.IsNullOrWhiteSpace(options.ServerIdentitySeedFile))
         {
             var base64 = File.ReadAllText(options.ServerIdentitySeedFile).Trim();
-            return PqIdentity.ImportPrivateSeed(Convert.FromBase64String(base64));
+            return ImportSeedAndZero(base64);
         }
 
         throw new InvalidOperationException(
             "PqSecureChannel options have no server identity: set ServerIdentitySeedBase64 or ServerIdentitySeedFile.");
+    }
+
+    /// <summary>
+    /// Decodes a base64 identity seed, imports it, and zeroes the intermediate byte array. The base64
+    /// <em>string</em> retained by <see cref="IConfiguration"/> is outside this code's control, but the
+    /// raw seed bytes this method materializes are not left for the GC to reclaim un-zeroed.
+    /// </summary>
+    private static PqIdentity ImportSeedAndZero(string base64)
+    {
+        var seed = Convert.FromBase64String(base64);
+        try
+        {
+            return PqIdentity.ImportPrivateSeed(seed);
+        }
+        finally
+        {
+            System.Security.Cryptography.CryptographicOperations.ZeroMemory(seed);
+        }
     }
 }
 
