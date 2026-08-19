@@ -4,7 +4,7 @@ Test helpers for [PostQuantum.SecureChannel](https://github.com/systemslibrarian
 Drop into a test project to skip the boilerplate around real transports and identity generation.
 
 ```bash
-dotnet add package PostQuantum.SecureChannel.Testing --version 1.0.0
+dotnet add package PostQuantum.SecureChannel.Testing --version 1.0.1
 ```
 
 ## What's included

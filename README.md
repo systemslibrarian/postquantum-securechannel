@@ -58,11 +58,11 @@ no way to configure your way into a weak session.
 ## Install
 
 ```bash
-dotnet add package PostQuantum.SecureChannel --version 1.0.0
+dotnet add package PostQuantum.SecureChannel --version 1.0.1
 
 # Optional companions:
-dotnet add package PostQuantum.SecureChannel.AspNetCore --version 1.0.0   # DI, WebSocket
-dotnet add package PostQuantum.SecureChannel.Testing    --version 1.0.0   # tests only
+dotnet add package PostQuantum.SecureChannel.AspNetCore --version 1.0.1   # DI, WebSocket
+dotnet add package PostQuantum.SecureChannel.Testing    --version 1.0.1   # tests only
 ```
 
 Targets `net8.0`, `net9.0`, and `net10.0`. Wire format is stable as of 1.0 (protocol version 2);
