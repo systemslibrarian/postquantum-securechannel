@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       # Install every targeted runtime so all three target frameworks actually execute under test,
       # not just compile. The SDK (last entry) drives the build.
@@ -54,7 +54,7 @@ jobs:
     needs: build-and-test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0  # SourceLink needs full history
 
@@ -86,7 +86,7 @@ jobs:
     continue-on-error: true
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install ProVerif
         run: |
@@ -106,7 +106,7 @@ jobs:
     needs: build-and-test
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup .NET (8 / 9 / 10)
         uses: actions/setup-dotnet@v5
