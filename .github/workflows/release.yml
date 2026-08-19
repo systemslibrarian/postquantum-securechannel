@@ -87,7 +87,7 @@ jobs:
 
       - name: Create GitHub release
         if: ${{ env.RELEASE_TAG != '' && startsWith(env.RELEASE_TAG, 'v') }}
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.RELEASE_TAG }}
           generate_release_notes: true
