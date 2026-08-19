@@ -13,7 +13,7 @@
 
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel.AspNetCore</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <PackageReleaseNotes>1.0.0: Lockstep first stable release with PostQuantum.SecureChannel 1.0.0. No behavior changes of its own; it ProjectReferences PostQuantum.SecureChannel and inherits its wire format (protocol version 2). See the core package's release notes and KNOWN-GAPS.md — note the core is not independently audited.</PackageReleaseNotes>

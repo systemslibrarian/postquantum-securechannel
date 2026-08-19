@@ -6,6 +6,29 @@ breaking changes require a major-version bump. The one forward-looking caveat is
 which tracks an IETF draft — a combiner change in the final RFC would be a major-version wire break
 (see `KNOWN-GAPS.md` §2).
 
+## [1.0.1]
+
+Patch: dependency maintenance. No public API change, no wire-protocol change, and no
+behavioural change; a drop-in over 1.0.0.
+
+### Changed
+
+- **`BouncyCastle.Cryptography` 2.6.2 → 2.7.0** in `PostQuantum.SecureChannel`. Stays inside the
+  2.x line, so the published dependency floor does not cross a major version and no consumer is
+  forced to upgrade across one. No security advisory applies — the known BouncyCastle advisories
+  are all bounded at `< 2.3.1`, well below what 1.0.0 already shipped.
+- Test and CI toolchain updated — `Microsoft.NET.Test.Sdk` 18.8.1, `xunit` 2.9.3,
+  `xunit.runner.visualstudio` 3.1.5, `coverlet.collector` 10.0.1, `Xunit.SkippableFact` 1.5.61,
+  `Microsoft.AspNetCore.TestHost` 8.0.30, `BenchmarkDotNet` 0.15.8, `Microsoft.SourceLink.GitHub`
+  10.0.400, and the GitHub Actions used by CI and release. None of these reach a published
+  package.
+
+### Known
+
+- The `Formal model (ProVerif, advisory)` CI job is failing and has been since before this
+  release. It is marked `continue-on-error: true` in `ci.yml` and is not a required check; every
+  blocking check — `Build & test` on ubuntu and windows, `Coverage`, and `Pack` — is green.
+
 ## [1.0.0]
 
 **First stable release.** Commits to a stable public API and wire format (protocol version 2) under

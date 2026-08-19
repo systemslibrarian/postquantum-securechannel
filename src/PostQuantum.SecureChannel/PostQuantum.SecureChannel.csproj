@@ -15,7 +15,7 @@
   <!-- ============================ NuGet packaging metadata ============================ -->
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel</PackageId>
-    <Version>1.0.0</Version>
+    <Version>1.0.1</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <PackageReleaseNotes>1.0.0: First stable release. Commits to a stable public API and wire format (protocol version 2) under Semantic Versioning — no breaking API or wire change without a major-version bump. No wire-format change from 0.3.0-preview.2. Adds a property-based no-nonce-reuse sweep across the full sequence space and key-update epochs, plus higher-order transcript-equivalence tests (closes docs/AUDIT-SCOPE.md §3 and §5). NOT INDEPENDENTLY AUDITED: an external cryptographic review of the protocol composition (handshake, key schedule, transcript binding, nonce construction, replay window) has not been performed and is not feasible at this time; the primitives are validated against published IETF/NIST test vectors, but the composition is this library's own work. The X-Wing combiner tracks draft-connolly-cfrg-xwing-kem — if the final RFC changes the combiner that will be a major-version (2.0) wire-format break handled with explicit migration guidance. See KNOWN-GAPS.md and docs/AUDIT-SCOPE.md before adopting.</PackageReleaseNotes>
