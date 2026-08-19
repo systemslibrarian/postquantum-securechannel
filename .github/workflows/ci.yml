@@ -73,7 +73,7 @@ jobs:
         run: dotnet pack src/PostQuantum.SecureChannel.Testing/PostQuantum.SecureChannel.Testing.csproj --configuration Release -o ./artifacts
 
       - name: Upload package artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: nupkg
           path: ./artifacts/*.nupkg
@@ -120,7 +120,7 @@ jobs:
         run: dotnet test --configuration Release --framework net8.0 --collect:"XPlat Code Coverage" --results-directory ./coverage
 
       - name: Upload coverage report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: coverage
           path: ./coverage/**/coverage.cobertura.xml
