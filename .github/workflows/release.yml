@@ -41,6 +41,47 @@ jobs:
         with:
           fetch-depth: 0  # SourceLink and deterministic builds need full history
 
+      # Fail before anything is packed if the version documented to users has drifted from the
+      # tag being published. This workflow takes the package version from the .csproj, so without
+      # this nothing checks that the tag, the three packages, and the install snippets agree.
+      # The equivalent gate in postquantum-file-encryption rejected a v1.7.0 tag over exactly this
+      # class of mismatch before anything reached nuget.org; postquantum-aspnetcore lacked the
+      # snippet half of it and shipped three releases telling users to install 0.8.0-preview.1.
+      - name: Verify documented versions match the release tag
+        run: |
+          set -euo pipefail
+          version="${RELEASE_TAG#v}"
+          echo "Release tag version: ${version}"
+          fail=0
+
+          # 1. Every packable project must declare exactly the tag version — the three ship in lockstep.
+          while IFS= read -r csproj; do
+            declared="$(grep -oPm1 '(?<=<Version>)[^<]+' "$csproj" || true)"
+            if [ -n "$declared" ] && [ "$declared" != "$version" ]; then
+              echo "::error file=$csproj::<Version> is '$declared' but the release tag is '$version'"
+              fail=1
+            fi
+          done < <(git ls-files '*.csproj')
+
+          # 2. Every 'dotnet add package … --version X.Y.Z' snippet in tracked Markdown must pin the
+          #    tag. Package READMEs ship inside the .nupkg, so these are what consumers read on
+          #    nuget.org. CHANGELOG.md is excluded — version mentions there are facts about earlier
+          #    releases, not instructions.
+          while IFS= read -r hit; do
+            file="${hit%%:*}"
+            pinned="$(printf '%s' "$hit" | grep -oP -- '--version \K[0-9][0-9A-Za-z.-]*')"
+            if [ "$pinned" != "$version" ]; then
+              echo "::error file=$file::install snippet pins '--version $pinned' but the release tag is '$version'"
+              fail=1
+            fi
+          done < <(git grep -nP -- '--version [0-9]' -- '*.md' ':!CHANGELOG.md' || true)
+
+          if [ "$fail" -ne 0 ]; then
+            echo "Version drift detected — sweep the docs to ${version} before tagging." >&2
+            exit 1
+          fi
+          echo "All project and documentation versions match ${version}."
+
       - name: Setup .NET (8 / 9 / 10)
         uses: actions/setup-dotnet@v5
         with:
