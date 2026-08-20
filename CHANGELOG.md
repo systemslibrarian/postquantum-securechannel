@@ -6,6 +6,19 @@ breaking changes require a major-version bump. The one forward-looking caveat is
 which tracks an IETF draft — a combiner change in the final RFC would be a major-version wire break
 (see `KNOWN-GAPS.md` §2).
 
+## [1.0.2] — 2026-08-20
+
+Patch: dependency maintenance and a release-gate addition. No public API change, no wire-protocol
+change; a drop-in over 1.0.1.
+
+### Changed
+
+- Test and CI toolchain updated — `Microsoft.NET.Test.Sdk` and `xunit.runner.visualstudio`.
+- **The release workflow now verifies documented versions against the tag.** It previously took the
+  package version from the .csproj and never compared it to the tag, so nothing checked that the
+  tag, the three packages, and the five install snippets across three READMEs agreed. Two of those
+  READMEs ship inside the .nupkg.
+
 ## [1.0.1]
 
 Patch: dependency maintenance. No public API change, no wire-protocol change, and no

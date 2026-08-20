@@ -13,7 +13,7 @@
 
   <PropertyGroup>
     <PackageId>PostQuantum.SecureChannel.Testing</PackageId>
-    <Version>1.0.1</Version>
+    <Version>1.0.2</Version>
     <AssemblyVersion>1.0.0.0</AssemblyVersion>
     <FileVersion>1.0.0.0</FileVersion>
     <PackageReleaseNotes>1.0.0: Lockstep first stable release with PostQuantum.SecureChannel 1.0.0. Test helpers only (in-memory duplex + PqHandshakeHarness); intended for test projects, not production. Use with the matching 1.0.0 core.</PackageReleaseNotes>
