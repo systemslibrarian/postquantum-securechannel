@@ -6,7 +6,7 @@ registration, configuration binding for pinned identities, and a WebSocket adapt
 incoming or outgoing WebSocket into a `PqSecureChannelStream`.
 
 ```bash
-dotnet add package PostQuantum.SecureChannel.AspNetCore --version 1.0.1
+dotnet add package PostQuantum.SecureChannel.AspNetCore --version 1.0.2
 ```
 
 ## Server (Kestrel + WebSockets)
